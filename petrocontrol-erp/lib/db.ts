@@ -1,0 +1,11 @@
+import { PrismaClient } from '../generated/prisma';
+
+const globalForPrisma = global as unknown as { prisma: PrismaClient };
+
+export const db =
+  globalForPrisma.prisma ||
+  new PrismaClient({
+    log: ['query', 'error', 'warn'], // para ver las consultas SQL en consola
+  });
+
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = db;
