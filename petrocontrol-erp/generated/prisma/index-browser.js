@@ -131,6 +131,114 @@ exports.Prisma.UsuarioScalarFieldEnum = {
   updatedAt: 'updatedAt'
 };
 
+exports.Prisma.EstacionScalarFieldEnum = {
+  id: 'id',
+  nombre: 'nombre',
+  direccion: 'direccion',
+  activa: 'activa',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.MaquinaScalarFieldEnum = {
+  id: 'id',
+  estacionId: 'estacionId',
+  nombre: 'nombre',
+  activa: 'activa',
+  moduloContador: 'moduloContador',
+  direccionTotalizador: 'direccionTotalizador',
+  direccionProductos: 'direccionProductos'
+};
+
+exports.Prisma.CombustibleScalarFieldEnum = {
+  id: 'id',
+  nombre: 'nombre'
+};
+
+exports.Prisma.HistorialPrecioScalarFieldEnum = {
+  id: 'id',
+  combustibleId: 'combustibleId',
+  precio: 'precio',
+  vigenteDesde: 'vigenteDesde'
+};
+
+exports.Prisma.TanqueScalarFieldEnum = {
+  id: 'id',
+  estacionId: 'estacionId',
+  combustibleId: 'combustibleId',
+  capacidad: 'capacidad',
+  minimo: 'minimo'
+};
+
+exports.Prisma.MovimientoStockScalarFieldEnum = {
+  id: 'id',
+  tanqueId: 'tanqueId',
+  tipo: 'tipo',
+  galones: 'galones',
+  fecha: 'fecha',
+  jornadaId: 'jornadaId',
+  nota: 'nota'
+};
+
+exports.Prisma.EmpleadoScalarFieldEnum = {
+  id: 'id',
+  nombre: 'nombre',
+  estacionId: 'estacionId',
+  horarioInicio: 'horarioInicio',
+  horarioFin: 'horarioFin',
+  activo: 'activo',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.JornadaScalarFieldEnum = {
+  id: 'id',
+  empleadoId: 'empleadoId',
+  maquinaId: 'maquinaId',
+  estacionId: 'estacionId',
+  inicio: 'inicio',
+  fin: 'fin',
+  estado: 'estado',
+  notas: 'notas',
+  totalizadorEntrada: 'totalizadorEntrada',
+  totalizadorSalida: 'totalizadorSalida',
+  galonesTotalizador: 'galonesTotalizador',
+  galonesProductos: 'galonesProductos',
+  diferenciaControl: 'diferenciaControl',
+  importeEsperado: 'importeEsperado',
+  importeDeclarado: 'importeDeclarado',
+  diferenciaCaja: 'diferenciaCaja'
+};
+
+exports.Prisma.LecturaJornadaScalarFieldEnum = {
+  id: 'id',
+  jornadaId: 'jornadaId',
+  combustibleId: 'combustibleId',
+  entradaAtras: 'entradaAtras',
+  entradaAdelante: 'entradaAdelante',
+  salidaAtras: 'salidaAtras',
+  salidaAdelante: 'salidaAdelante',
+  huboReinicio: 'huboReinicio',
+  galones: 'galones',
+  precioUnitario: 'precioUnitario',
+  importe: 'importe'
+};
+
+exports.Prisma.PagoJornadaScalarFieldEnum = {
+  id: 'id',
+  jornadaId: 'jornadaId',
+  medio: 'medio',
+  monto: 'monto',
+  nota: 'nota'
+};
+
+exports.Prisma.GastoScalarFieldEnum = {
+  id: 'id',
+  estacionId: 'estacionId',
+  categoria: 'categoria',
+  descripcion: 'descripcion',
+  monto: 'monto',
+  fecha: 'fecha'
+};
+
 exports.Prisma.SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -141,9 +249,47 @@ exports.Prisma.QueryMode = {
   insensitive: 'insensitive'
 };
 
+exports.Prisma.NullsOrder = {
+  first: 'first',
+  last: 'last'
+};
+exports.DireccionContador = exports.$Enums.DireccionContador = {
+  SUBE: 'SUBE',
+  BAJA: 'BAJA'
+};
+
+exports.TipoMovimiento = exports.$Enums.TipoMovimiento = {
+  RECARGA: 'RECARGA',
+  VENTA: 'VENTA',
+  AJUSTE: 'AJUSTE',
+  MERMA: 'MERMA'
+};
+
+exports.EstadoJornada = exports.$Enums.EstadoJornada = {
+  ABIERTA: 'ABIERTA',
+  CERRADA: 'CERRADA'
+};
+
+exports.MedioPago = exports.$Enums.MedioPago = {
+  EFECTIVO: 'EFECTIVO',
+  TARJETA: 'TARJETA',
+  TRANSFERENCIA: 'TRANSFERENCIA',
+  DESCUENTO: 'DESCUENTO'
+};
 
 exports.Prisma.ModelName = {
-  Usuario: 'Usuario'
+  Usuario: 'Usuario',
+  Estacion: 'Estacion',
+  Maquina: 'Maquina',
+  Combustible: 'Combustible',
+  HistorialPrecio: 'HistorialPrecio',
+  Tanque: 'Tanque',
+  MovimientoStock: 'MovimientoStock',
+  Empleado: 'Empleado',
+  Jornada: 'Jornada',
+  LecturaJornada: 'LecturaJornada',
+  PagoJornada: 'PagoJornada',
+  Gasto: 'Gasto'
 };
 
 /**

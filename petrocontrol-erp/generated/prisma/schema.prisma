@@ -8,12 +8,244 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ============================================================
+// PetroControl - Modelo de datos (Prisma + PostgreSQL)
+// Un solo usuario (el dueño). Unidad de medida: GALONES. Moneda: soles (PEN).
+// ============================================================
+// ------------------------------------------------------------
+// ACCESO
+// ------------------------------------------------------------
+
+// Solo el dueño. Guardar `password` siempre hasheada (bcrypt/argon2).
 model Usuario {
-  id        String   @id @default(uuid())
+  id        Int      @id @default(autoincrement())
   nombre    String
   apellido  String
   email     String   @unique
-  password  String // Aquí guardaremos la contraseña hasheada (ej. con bcrypt)
+  password  String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ------------------------------------------------------------
+// ESTRUCTURA FÍSICA
+// ------------------------------------------------------------
+
+model Estacion {
+  id        Int      @id @default(autoincrement())
+  nombre    String
+  direccion String?
+  activa    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  maquinas  Maquina[]
+  tanques   Tanque[]
+  empleados Empleado[]
+  jornadas  Jornada[]
+  gastos    Gasto[]
+}
+
+enum DireccionContador {
+  SUBE
+  BAJA
+}
+
+// Cada máquina tiene un contador general (8 dígitos, máx. 99999999, vuelve a 0)
+// y 6 contadores por producto (3 productos x 2 lados: atrás / adelante).
+// Un empleado atiende toda la máquina (ambos lados).
+model Maquina {
+  id         Int      @id @default(autoincrement())
+  estacionId Int
+  estacion   Estacion @relation(fields: [estacionId], references: [id])
+  nombre     String // ej: "Máquina 1"
+  activa     Boolean  @default(true)
+
+  // Valor a partir del cual el contador vuelve a 0 (99999999 + 1).
+  // Fórmula: galones = (salida - entrada) mod modulo   (si SUBE)
+  //          galones = (entrada - salida) mod modulo   (si BAJA)
+  moduloContador       BigInt            @default(100000000)
+  direccionTotalizador DireccionContador @default(BAJA) // contador general (a confirmar con prueba)
+  direccionProductos   DireccionContador @default(SUBE) // los 6 de la planilla (a confirmar)
+
+  jornadas Jornada[]
+
+  @@unique([estacionId, nombre])
+}
+
+// Diesel, Regular (Gasohol 90), Premium (Gasohol 95)
+model Combustible {
+  id     Int    @id @default(autoincrement())
+  nombre String @unique
+
+  precios  HistorialPrecio[]
+  tanques  Tanque[]
+  lecturas LecturaJornada[]
+}
+
+// El precio vigente es el último con vigenteDesde <= fecha de la jornada.
+model HistorialPrecio {
+  id            Int         @id @default(autoincrement())
+  combustibleId Int
+  combustible   Combustible @relation(fields: [combustibleId], references: [id])
+  precio        Decimal     @db.Decimal(10, 2) // soles por galón
+  vigenteDesde  DateTime
+
+  @@index([combustibleId, vigenteDesde])
+}
+
+// ------------------------------------------------------------
+// INVENTARIO
+// ------------------------------------------------------------
+
+// El stock actual NO se guarda: es la suma de MovimientoStock.galones del tanque.
+model Tanque {
+  id            Int         @id @default(autoincrement())
+  estacionId    Int
+  combustibleId Int
+  estacion      Estacion    @relation(fields: [estacionId], references: [id])
+  combustible   Combustible @relation(fields: [combustibleId], references: [id])
+  capacidad     Decimal     @db.Decimal(12, 2) // galones
+  minimo        Decimal     @db.Decimal(12, 2) // umbral de alerta
+
+  movimientos MovimientoStock[]
+
+  @@unique([estacionId, combustibleId])
+}
+
+enum TipoMovimiento {
+  RECARGA // entrada por cisterna (+)
+  VENTA // generado al cerrar una jornada (-)
+  AJUSTE // corrección manual (+/-)
+  MERMA // pérdida (-)
+}
+
+model MovimientoStock {
+  id        Int            @id @default(autoincrement())
+  tanqueId  Int
+  tanque    Tanque         @relation(fields: [tanqueId], references: [id])
+  tipo      TipoMovimiento
+  galones   Decimal        @db.Decimal(12, 2) // positivo suma, negativo resta
+  fecha     DateTime       @default(now())
+  jornadaId Int?
+  jornada   Jornada?       @relation(fields: [jornadaId], references: [id])
+  nota      String?
+
+  @@index([tanqueId, fecha])
+}
+
+// ------------------------------------------------------------
+// PERSONAL
+// ------------------------------------------------------------
+
+model Empleado {
+  id            Int      @id @default(autoincrement())
+  nombre        String
+  estacionId    Int
+  estacion      Estacion @relation(fields: [estacionId], references: [id])
+  horarioInicio String? // "06:00"
+  horarioFin    String? // "14:00" (puede cruzar medianoche)
+  activo        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  jornadas Jornada[]
+}
+
+// ------------------------------------------------------------
+// JORNADAS (turno de un empleado en una máquina) + CUADRE DE CAJA
+// ------------------------------------------------------------
+
+enum EstadoJornada {
+  ABIERTA
+  CERRADA
+}
+
+model Jornada {
+  id         Int           @id @default(autoincrement())
+  empleadoId Int
+  maquinaId  Int
+  estacionId Int
+  empleado   Empleado      @relation(fields: [empleadoId], references: [id])
+  maquina    Maquina       @relation(fields: [maquinaId], references: [id])
+  estacion   Estacion      @relation(fields: [estacionId], references: [id])
+  inicio     DateTime
+  fin        DateTime?
+  estado     EstadoJornada @default(ABIERTA)
+  notas      String?
+
+  // Contador general de la máquina (8 dígitos). Control cruzado.
+  totalizadorEntrada Decimal  @db.Decimal(12, 2)
+  totalizadorSalida  Decimal? @db.Decimal(12, 2)
+  galonesTotalizador Decimal? @db.Decimal(12, 2)
+
+  // Calculados y congelados al cerrar la jornada
+  galonesProductos  Decimal? @db.Decimal(12, 2) // suma de los 6 contadores
+  diferenciaControl Decimal? @db.Decimal(12, 2) // totalizador - productos (debe ser 0)
+  importeEsperado   Decimal? @db.Decimal(12, 2) // suma de importes por producto
+  importeDeclarado  Decimal? @db.Decimal(12, 2) // suma de pagos (incluye descuentos)
+  diferenciaCaja    Decimal? @db.Decimal(12, 2) // esperado - declarado (<0 sobrante, >0 faltante)
+
+  lecturas    LecturaJornada[]
+  pagos       PagoJornada[]
+  movimientos MovimientoStock[]
+
+  @@index([empleadoId, inicio])
+  @@index([maquinaId, inicio])
+  @@index([estacionId, inicio])
+}
+
+// Una fila por producto. Cada producto tiene 4 valores: entrada/salida x atrás/adelante.
+// galones = (Δ atrás) + (Δ adelante), con Δ según direccionProductos y moduloContador.
+model LecturaJornada {
+  id            Int         @id @default(autoincrement())
+  jornadaId     Int
+  combustibleId Int
+  jornada       Jornada     @relation(fields: [jornadaId], references: [id])
+  combustible   Combustible @relation(fields: [combustibleId], references: [id])
+
+  entradaAtras    Decimal  @db.Decimal(12, 2)
+  entradaAdelante Decimal  @db.Decimal(12, 2)
+  salidaAtras     Decimal? @db.Decimal(12, 2)
+  salidaAdelante  Decimal? @db.Decimal(12, 2)
+
+  huboReinicio   Boolean  @default(false) // el contador pasó por 0 (confirmado por el usuario)
+  galones        Decimal? @db.Decimal(12, 2)
+  precioUnitario Decimal? @db.Decimal(10, 2) // congelado al cerrar
+  importe        Decimal? @db.Decimal(12, 2) // galones x precioUnitario
+
+  @@unique([jornadaId, combustibleId])
+}
+
+enum MedioPago {
+  EFECTIVO
+  TARJETA
+  TRANSFERENCIA // incluye Yape/Plin salvo que se quiera separar
+  DESCUENTO // a definir con el dueño: vales, crédito, consumo propio, etc.
+}
+
+// Lo que el empleado entrega. La suma debe igualar importeEsperado.
+model PagoJornada {
+  id        Int       @id @default(autoincrement())
+  jornadaId Int
+  jornada   Jornada   @relation(fields: [jornadaId], references: [id], onDelete: Cascade)
+  medio     MedioPago
+  monto     Decimal   @db.Decimal(12, 2)
+  nota      String? // ej: a quién se hizo el descuento
+
+  @@index([jornadaId])
+}
+
+// ------------------------------------------------------------
+// GASTOS
+// ------------------------------------------------------------
+
+model Gasto {
+  id          Int      @id @default(autoincrement())
+  estacionId  Int
+  estacion    Estacion @relation(fields: [estacionId], references: [id])
+  categoria   String // Servicios, Mantenimiento, Personal, Logística, Otros
+  descripcion String
+  monto       Decimal  @db.Decimal(12, 2)
+  fecha       DateTime
+
+  @@index([estacionId, fecha])
 }
