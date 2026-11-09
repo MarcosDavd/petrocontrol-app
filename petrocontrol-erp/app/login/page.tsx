@@ -73,7 +73,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 className="field py-3"
-                placeholder="dueno@petrocontrol.pe"
+                placeholder="tu@correo.com"
                 required
               />
             </div>
