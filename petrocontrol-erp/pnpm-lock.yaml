@@ -45,6 +45,9 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
+      '@netlify/plugin-nextjs':
+        specifier: 5.16.4
+        version: 5.16.4
       '@tailwindcss/turbopack':
         specifier: ^4
         version: 4.3.3
@@ -575,6 +578,10 @@ packages:
     peerDependencies:
       '@emnapi/core': ^1.7.1 || ^2.0.0-alpha.4
       '@emnapi/runtime': ^1.7.1 || ^2.0.0-alpha.4
+
+  '@netlify/plugin-nextjs@5.16.4':
+    resolution: {integrity: sha512-yvFqkPxCeDrdC9y51Fxt5rK0lNWPo+esoc5uYbHBkM6kgop7s7jL2NtFFjN8g5SitbCnXoVm+dOlrgKEYfdx2g==}
+    engines: {node: '>=18.0.0'}
 
   '@next/env@16.4.5':
     resolution: {integrity: sha512-JwSPwpdkZL5VMl2jA/q+JI8MZdweAL3xmw5/tb9y/TLtmS0YXZnmYDzSihwk8xTj1OL+WM53gTqaj96yuLp6Xw==}
@@ -3119,6 +3126,8 @@ snapshots:
       '@emnapi/runtime': 1.10.0
       '@tybys/wasm-util': 0.10.4
     optional: true
+
+  '@netlify/plugin-nextjs@5.16.4': {}
 
   '@next/env@16.4.5': {}
 

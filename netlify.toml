@@ -11,3 +11,8 @@
 # Variables que se configuran en Netlify (Site configuration → Environment variables), NO aquí:
 #   DATABASE_URL    cadena de conexión de Neon con "Connection pooling" activado
 #   SESSION_SECRET  texto aleatorio de 32+ caracteres (ej.: openssl rand -base64 48)
+
+# Adaptador de Next.js para Netlify (convierte la app en funciones serverless).
+# Se declara explícitamente porque la app está en una subcarpeta y Netlify no lo detecta solo.
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
