@@ -1,0 +1,13 @@
+# Despliegue de GL-App en Netlify (la app está en la subcarpeta petrocontrol-erp)
+[build]
+  base = "petrocontrol-erp"
+  command = "pnpm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "22"
+  PNPM_VERSION = "12.11.2"
+
+# Variables que se configuran en Netlify (Site configuration → Environment variables), NO aquí:
+#   DATABASE_URL    cadena de conexión de Neon con "Connection pooling" activado
+#   SESSION_SECRET  texto aleatorio de 32+ caracteres (ej.: openssl rand -base64 48)

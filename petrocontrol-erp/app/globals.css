@@ -1,26 +1,189 @@
 @import "tailwindcss";
 
+/*
+ * GL-App — tokens de marca Grifos Lim
+ * Fuente: grifos-lim-brand/tokens/colores.css (paleta + modo oscuro)
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+  /* Paleta base */
+  --gl-verde: #0f6b34;
+  --gl-verde-700: #0a5128;
+  --gl-verde-500: #1e8a4c;
+  --gl-verde-100: #e3f2e8;
+  --gl-amarillo: #f2b705;
+  --gl-amarillo-700: #c99400;
+  --gl-amarillo-100: #fff6d6;
+  --gl-rojo: #c62828;
+  --gl-rojo-700: #931d1d;
+  --gl-rojo-100: #fbe5e5;
+  --gl-grafito: #1c1c1e;
+  --gl-grafito-700: #2c2c2e;
+  --gl-gris-500: #6b6b70;
+  --gl-gris-300: #d9d9d6;
+  --gl-gris-100: #f0f0ee;
+  --gl-fondo: #f8f8f6;
+  --gl-blanco: #ffffff;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Semánticos (modo claro) */
+  --primary: #0f6b34;
+  --primary-hover: #0a5128;
+  --primary-light: #e3f2e8;
+  --on-primary: #ffffff;
+  --accent: #f2b705;
+  --accent-hover: #c99400;
+  --accent-light: #fff6d6;
+  --on-accent: #1c1c1e;
+  --danger: #c62828;
+  --danger-hover: #931d1d;
+  --danger-light: #fbe5e5;
+  --on-danger: #ffffff;
+  --success: #1e8a4c;
+  --warning: #c99400;
+  --text: #1c1c1e;
+  --text-muted: #6b6b70;
+  --border: #d9d9d6;
+  --surface: #ffffff;
+  --surface-alt: #f0f0ee;
+  --background: #f8f8f6;
+
+  /* Barra lateral: siempre grafito (identidad de marca) */
+  --sidebar: #1c1c1e;
+  --sidebar-hover: #2c2c2e;
+  --sidebar-text: #f2f2f0;
+  --sidebar-muted: #a1a1a6;
+
+  color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --primary: #2ea35e;
+    --primary-hover: #3bba6e;
+    --primary-light: #12301e;
+    --on-primary: #ffffff;
+    --accent: #f2b705;
+    --accent-hover: #c99400;
+    --accent-light: #3a2e05;
+    --on-accent: #1c1c1e;
+    --danger: #e5484d;
+    --danger-hover: #931d1d;
+    --danger-light: #3a1415;
+    --on-danger: #ffffff;
+    --success: #2ea35e;
+    --warning: #f2b705;
+    --text: #f2f2f0;
+    --text-muted: #a1a1a6;
+    --border: #3a3a3c;
+    --surface: #242426;
+    --surface-alt: #2c2c2e;
+    --background: #1c1c1e;
+
+    --sidebar: #151517;
+    --sidebar-hover: #242426;
+
+    color-scheme: dark;
   }
+}
+
+@theme inline {
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-light: var(--primary-light);
+  --color-on-primary: var(--on-primary);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-light: var(--accent-light);
+  --color-on-accent: var(--on-accent);
+  --color-danger: var(--danger);
+  --color-danger-hover: var(--danger-hover);
+  --color-danger-light: var(--danger-light);
+  --color-on-danger: var(--on-danger);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-fg: var(--text);
+  --color-muted: var(--text-muted);
+  --color-border: var(--border);
+  --color-surface: var(--surface);
+  --color-surface-alt: var(--surface-alt);
+  --color-background: var(--background);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-hover: var(--sidebar-hover);
+  --color-sidebar-text: var(--sidebar-text);
+  --color-sidebar-muted: var(--sidebar-muted);
+
+  /* Colores fijos de marca */
+  --color-gl-verde: var(--gl-verde);
+  --color-gl-amarillo: var(--gl-amarillo);
+  --color-gl-rojo: var(--gl-rojo);
+  --color-gl-grafito: var(--gl-grafito);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
 }
 
 body {
   background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  color: var(--text);
+  font-family: var(--font-geist-sans);
+}
+
+/* Componentes reutilizables (utilidades propias de Tailwind v4) */
+@utility card {
+  @apply rounded-2xl border border-border bg-surface p-4 shadow-sm sm:p-5;
+}
+
+@utility card-title {
+  @apply mb-4 flex items-center gap-2 text-lg font-semibold text-fg;
+}
+
+@utility item {
+  @apply rounded-xl border border-border bg-surface-alt/60 p-3 text-sm text-fg;
+}
+
+@utility field {
+  @apply w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-base text-fg outline-none transition placeholder:text-muted focus:border-primary focus:ring-2 focus:ring-primary/20 sm:text-sm;
+}
+
+@utility label {
+  @apply mb-1 block text-xs font-medium text-muted;
+}
+
+@utility check {
+  @apply h-4 w-4 rounded border-border accent-(--primary);
+}
+
+@utility btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60;
+}
+
+@utility btn-primary {
+  @apply btn bg-primary text-on-primary hover:bg-primary-hover;
+}
+
+@utility btn-accent {
+  @apply btn bg-accent text-on-accent hover:bg-accent-hover;
+}
+
+@utility btn-ghost {
+  @apply btn border border-border bg-surface text-fg hover:border-primary hover:text-primary;
+}
+
+@utility badge {
+  @apply inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide;
+}
+
+@utility badge-success {
+  @apply badge bg-primary-light text-success;
+}
+
+@utility badge-warning {
+  @apply badge bg-accent-light text-warning;
+}
+
+@utility badge-danger {
+  @apply badge bg-danger-light text-danger;
+}
+
+@utility badge-neutral {
+  @apply badge bg-surface-alt text-muted;
 }

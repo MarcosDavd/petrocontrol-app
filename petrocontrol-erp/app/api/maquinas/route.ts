@@ -4,7 +4,7 @@ import { maquinaSchema } from '@/lib/validation/maestros';
 
 export async function GET() {
   const maquinas = await db.maquina.findMany({
-    include: { estacion: true },
+    include: { estacion: true, productos: { include: { combustible: true } } },
     orderBy: [{ estacionId: 'asc' }, { nombre: 'asc' }],
   });
 
@@ -14,9 +14,17 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const contentType = request.headers.get('content-type') ?? '';
-    const rawData = contentType.includes('application/json')
-      ? await request.json()
-      : Object.fromEntries((await request.formData()).entries());
+    let rawData: Record<string, unknown>;
+    let combustibleIds: number[] = [];
+    if (contentType.includes('application/json')) {
+      rawData = await request.json();
+      combustibleIds = Array.isArray(rawData.combustibleIds) ? rawData.combustibleIds.map(Number) : [];
+    } else {
+      const formData = await request.formData();
+      rawData = Object.fromEntries(formData.entries());
+      combustibleIds = formData.getAll('combustibleIds').map(Number);
+    }
+    combustibleIds = combustibleIds.filter((id) => Number.isInteger(id) && id > 0);
 
     const parsed = maquinaSchema.safeParse(rawData);
 
@@ -33,11 +41,12 @@ export async function POST(request: Request) {
         estacionId: data.estacionId,
         nombre: data.nombre,
         activa: data.activa ?? true,
+        productos: { create: combustibleIds.map((combustibleId) => ({ combustibleId })) },
       },
     });
 
     if (!contentType.includes('application/json')) {
-      return NextResponse.redirect(new URL('/maestros', request.url));
+      return NextResponse.redirect(new URL('/estaciones', request.url), 303);
     }
 
     return NextResponse.json({ ok: true, maquina }, { status: 201 });

@@ -3,108 +3,117 @@ import { Prisma, PrismaClient } from './generated/prisma';
 
 const prisma = new PrismaClient();
 
+// Precios por galón tomados de la planilla. GLP: completar con el precio real en Maestros.
+const COMBUSTIBLES = [
+  { nombre: 'Diesel', precio: '20.79' },
+  { nombre: 'Regular', precio: '17.80' }, // Gasohol 90
+  { nombre: 'Premium', precio: '19.79' }, // Gasohol 95
+  { nombre: 'GLP', precio: null },
+];
+
+// Seed idempotente: se puede ejecutar varias veces sin duplicar datos.
 async function main() {
-  const email = 'dueno@petrocontrol.pe';
-  const password = 'Admin123!';
-  const hashedPassword = await bcrypt.hash(password, 10);
+  // Credenciales del dueño: en producción vienen de ADMIN_EMAIL / ADMIN_PASSWORD.
+  // La contraseña de desarrollo solo se permite contra una base de datos local.
+  const esLocal = /@(localhost|127\.0\.0\.1)[:/]/.test(process.env.DATABASE_URL ?? '');
+  const email = process.env.ADMIN_EMAIL ?? 'dueno@petrocontrol.pe';
+  const password = process.env.ADMIN_PASSWORD ?? (esLocal ? 'Admin123!' : '');
+  if (password.length < 10 && !esLocal) {
+    throw new Error('Define ADMIN_PASSWORD (mínimo 10 caracteres) para crear el usuario en una base de datos remota.');
+  }
 
   const existing = await prisma.usuario.findUnique({ where: { email } });
-
-  if (existing) {
-    console.log(`Usuario existente: ${email}`);
-    return;
-  }
-
-  const owner = await prisma.usuario.create({
-    data: {
-      nombre: 'Dueño',
-      apellido: 'PetroControl',
-      email,
-      password: hashedPassword,
-    },
-  });
-
-  const combustibles = await Promise.all([
-    prisma.combustible.upsert({
-      where: { nombre: 'Diesel' },
-      update: {},
-      create: { nombre: 'Diesel' },
-    }),
-    prisma.combustible.upsert({
-      where: { nombre: 'Regular' },
-      update: {},
-      create: { nombre: 'Regular' },
-    }),
-    prisma.combustible.upsert({
-      where: { nombre: 'Premium' },
-      update: {},
-      create: { nombre: 'Premium' },
-    }),
-  ]);
-
-  const precioBase = [
-    { nombre: 'Diesel', precio: '14.20' },
-    { nombre: 'Regular', precio: '15.10' },
-    { nombre: 'Premium', precio: '16.40' },
-  ];
-
-  for (const combustible of combustibles) {
-    const match = precioBase.find((item) => item.nombre === combustible.nombre);
-    if (!match) continue;
-
-    await prisma.historialPrecio.create({
+  if (!existing) {
+    await prisma.usuario.create({
       data: {
-        combustibleId: combustible.id,
-        precio: new Prisma.Decimal(match.precio),
-        vigenteDesde: new Date(),
+        nombre: 'Dueño',
+        apellido: 'Grifos Lim',
+        email,
+        password: await bcrypt.hash(password, 10),
       },
     });
+    console.log('Usuario creado:', email, esLocal ? `(contraseña de desarrollo: ${password})` : '(contraseña: la de ADMIN_PASSWORD)');
+  } else {
+    console.log(`Usuario existente: ${email}`);
   }
 
-  const estaciones = await Promise.all([
-    prisma.estacion.upsert({
-      where: { id: 1 },
+  const combustibles = [];
+  for (const item of COMBUSTIBLES) {
+    const combustible = await prisma.combustible.upsert({
+      where: { nombre: item.nombre },
       update: {},
-      create: {
-        nombre: 'Estación Central',
-        direccion: 'Av. Principal 123',
-      },
-    }),
-    prisma.estacion.upsert({
-      where: { id: 2 },
-      update: {},
-      create: {
-        nombre: 'Estación Sur',
-        direccion: 'Jr. Los Olivos 456',
-      },
-    }),
-  ]);
+      create: { nombre: item.nombre },
+    });
+    combustibles.push(combustible);
 
-  for (const estacion of estaciones) {
-    for (let index = 1; index <= 2; index += 1) {
-      await prisma.maquina.upsert({
-        where: {
-          estacionId_nombre: {
-            estacionId: estacion.id,
-            nombre: `Máquina ${index}`,
-          },
-        },
-        update: {},
-        create: {
-          estacionId: estacion.id,
-          nombre: `Máquina ${index}`,
+    const tienePrecio = await prisma.historialPrecio.count({ where: { combustibleId: combustible.id } });
+    if (!tienePrecio && item.precio) {
+      await prisma.historialPrecio.create({
+        data: {
+          combustibleId: combustible.id,
+          precio: new Prisma.Decimal(item.precio),
+          vigenteDesde: new Date('2026-01-01T00:00:00-05:00'),
         },
       });
     }
+  }
+
+  const liquidos = combustibles.filter((c) => c.nombre !== 'GLP');
+  const glp = combustibles.find((c) => c.nombre === 'GLP')!;
+
+  // Estaciones de Grifos Lim. Las de ejemplo de versiones anteriores del seed se renombran
+  // (y se les quita la dirección ficticia) en vez de duplicarse.
+  const ESTACIONES = [
+    { nombre: 'Pachas', anterior: { nombre: 'Estación Central', direccion: 'Av. Principal 123' } },
+    { nombre: 'Tunan', anterior: { nombre: 'Estación Sur', direccion: 'Jr. Los Olivos 456' } },
+  ];
+
+  const estaciones = [];
+  for (const { nombre, anterior } of ESTACIONES) {
+    const vieja = await prisma.estacion.findFirst({ where: { nombre: anterior.nombre } });
+    const actual = await prisma.estacion.findFirst({ where: { nombre } });
+    if (vieja && !actual) {
+      await prisma.estacion.update({
+        where: { id: vieja.id },
+        data: { nombre, direccion: vieja.direccion === anterior.direccion ? null : vieja.direccion },
+      });
+    }
+    const estacion = (await prisma.estacion.findFirst({ where: { nombre } })) ?? (await prisma.estacion.create({ data: { nombre } }));
+    estaciones.push(estacion);
+  }
+
+  for (const estacion of estaciones) {
+    // Máquinas de líquidos: Diesel, Regular y Premium (manguera atrás y adelante cada uno)
+    for (let index = 1; index <= 2; index += 1) {
+      const maquina = await prisma.maquina.upsert({
+        where: { estacionId_nombre: { estacionId: estacion.id, nombre: `Máquina ${index}` } },
+        update: {},
+        create: { estacionId: estacion.id, nombre: `Máquina ${index}` },
+      });
+      for (const combustible of liquidos) {
+        await prisma.maquinaCombustible.upsert({
+          where: { maquinaId_combustibleId: { maquinaId: maquina.id, combustibleId: combustible.id } },
+          update: {},
+          create: { maquinaId: maquina.id, combustibleId: combustible.id },
+        });
+      }
+    }
+
+    // Surtidor de GLP independiente
+    const surtidorGlp = await prisma.maquina.upsert({
+      where: { estacionId_nombre: { estacionId: estacion.id, nombre: 'Surtidor GLP' } },
+      update: {},
+      create: { estacionId: estacion.id, nombre: 'Surtidor GLP' },
+    });
+    await prisma.maquinaCombustible.upsert({
+      where: { maquinaId_combustibleId: { maquinaId: surtidorGlp.id, combustibleId: glp.id } },
+      update: {},
+      create: { maquinaId: surtidorGlp.id, combustibleId: glp.id },
+    });
 
     for (const combustible of combustibles) {
       await prisma.tanque.upsert({
-        where: {
-          estacionId_combustibleId: {
-            estacionId: estacion.id,
-            combustibleId: combustible.id,
-          },
-        },
+        where: { estacionId_combustibleId: { estacionId: estacion.id, combustibleId: combustible.id } },
         update: {},
         create: {
           estacionId: estacion.id,
@@ -116,15 +125,7 @@ async function main() {
     }
   }
 
-  console.log('Usuario creador:', {
-    id: owner.id,
-    email: owner.email,
-    nombre: owner.nombre,
-    apellido: owner.apellido,
-  });
-
-  console.log('Seed completado. Credenciales de acceso:');
-  console.log({ email, password });
+  console.log('Seed completado.');
 }
 
 main()

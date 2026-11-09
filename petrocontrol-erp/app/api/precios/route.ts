@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { fechaHoraLima } from '@/lib/zona-horaria';
 import { Prisma } from '@/generated/prisma';
 import { db } from '@/lib/db';
 import { precioSchema } from '@/lib/validation/maestros';
@@ -32,12 +33,18 @@ export async function POST(request: Request) {
       data: {
         combustibleId: parsed.data.combustibleId,
         precio: new Prisma.Decimal(parsed.data.precio.toString()),
-        vigenteDesde: new Date(),
+        // "YYYY-MM-DD" = vigente desde el inicio de ese día (hora local)
+        vigenteDesde:
+          parsed.data.vigenteDesde && /^\d{4}-\d{2}-\d{2}$/.test(parsed.data.vigenteDesde)
+            ? fechaHoraLima(parsed.data.vigenteDesde)
+            : parsed.data.vigenteDesde
+              ? new Date(parsed.data.vigenteDesde)
+              : new Date(),
       },
     });
 
     if (!contentType.includes('application/json')) {
-      return NextResponse.redirect(new URL('/maestros', request.url));
+      return NextResponse.redirect(new URL('/productos', request.url), 303);
     }
 
     return NextResponse.json({ ok: true, precio }, { status: 201 });

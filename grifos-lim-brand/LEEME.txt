@@ -1,0 +1,11 @@
+GRIFOS LIM — Kit de marca para la app
+
+svg/     Logos e íconos vectoriales (texto convertido a trazos, sin dependencia de fuentes)
+png/     Íconos de app en 16–1024 px, apple-touch-icon (180), maskable para PWA, logos
+ico/     favicon.ico y app-icon.ico (multi-resolución 16–256 px)
+tokens/  Paleta en CSS (variables + modo oscuro), JSON, Tailwind y Kotlin
+
+HTML sugerido para web:
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">

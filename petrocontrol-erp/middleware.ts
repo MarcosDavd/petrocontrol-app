@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth';
 
-const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/auth/logout'];
+const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/auth/logout', '/manifest.webmanifest'];
+// Recursos de marca (logos, íconos) visibles sin sesión, p. ej. en /login
+const PUBLIC_PREFIXES = ['/_next', '/favicon', '/brand/', '/icon', '/apple-icon'];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (pathname.startsWith('/_next') || pathname.startsWith('/favicon') || PUBLIC_PATHS.includes(pathname)) {
+  if (PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix)) || PUBLIC_PATHS.includes(pathname)) {
     return NextResponse.next();
   }
 

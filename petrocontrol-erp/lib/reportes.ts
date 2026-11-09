@@ -1,56 +1,45 @@
+/** Valores monetarios en céntimos y galones en centésimas. */
 export type JornadaResumenReporte = {
   importeEsperado: bigint;
   importeDeclarado: bigint;
   estacionId: number;
+  empleadoId: number;
 };
 
-export type GastoResumenReporte = {
-  monto: bigint;
-  estacionId: number;
+export type Acumulado = {
+  jornadas: number;
+  esperado: bigint;
+  declarado: bigint;
+  /** esperado - declarado: > 0 faltante, < 0 sobrante */
+  diferencia: bigint;
 };
 
-export function calcularResumenReportes({
-  jornadas,
-  gastos,
-}: {
-  jornadas: JornadaResumenReporte[];
-  gastos: GastoResumenReporte[];
-}) {
-  const totalIngresos = jornadas.reduce((sum, jornada) => sum + jornada.importeEsperado, 0n);
-  const totalDeclarado = jornadas.reduce((sum, jornada) => sum + jornada.importeDeclarado, 0n);
-  const totalGastos = gastos.reduce((sum, gasto) => sum + gasto.monto, 0n);
-  const utilidadNeta = totalIngresos - totalGastos;
+const vacio = (): Acumulado => ({ jornadas: 0, esperado: 0n, declarado: 0n, diferencia: 0n });
 
-  const porEstacion = new Map<number, { ingresos: bigint; declarados: bigint; gastos: bigint }>();
+function acumular(destino: Acumulado, jornada: JornadaResumenReporte) {
+  destino.jornadas += 1;
+  destino.esperado += jornada.importeEsperado;
+  destino.declarado += jornada.importeDeclarado;
+  destino.diferencia += jornada.importeEsperado - jornada.importeDeclarado;
+}
+
+/** Resume el cuadre de caja de jornadas cerradas: total, por estación y por empleado. */
+export function calcularResumenReportes({ jornadas }: { jornadas: JornadaResumenReporte[] }) {
+  const total = vacio();
+  const porEstacion = new Map<number, Acumulado>();
+  const porEmpleado = new Map<number, Acumulado>();
 
   for (const jornada of jornadas) {
-    const estacion = porEstacion.get(jornada.estacionId) ?? {
-      ingresos: 0n,
-      declarados: 0n,
-      gastos: 0n,
-    };
+    acumular(total, jornada);
 
-    estacion.ingresos += jornada.importeEsperado;
-    estacion.declarados += jornada.importeDeclarado;
+    const estacion = porEstacion.get(jornada.estacionId) ?? vacio();
+    acumular(estacion, jornada);
     porEstacion.set(jornada.estacionId, estacion);
+
+    const empleado = porEmpleado.get(jornada.empleadoId) ?? vacio();
+    acumular(empleado, jornada);
+    porEmpleado.set(jornada.empleadoId, empleado);
   }
 
-  for (const gasto of gastos) {
-    const estacion = porEstacion.get(gasto.estacionId) ?? {
-      ingresos: 0n,
-      declarados: 0n,
-      gastos: 0n,
-    };
-
-    estacion.gastos += gasto.monto;
-    porEstacion.set(gasto.estacionId, estacion);
-  }
-
-  return {
-    totalIngresos,
-    totalDeclarado,
-    totalGastos,
-    utilidadNeta,
-    porEstacion: Object.fromEntries(Array.from(porEstacion.entries())),
-  };
+  return { total, porEstacion, porEmpleado };
 }

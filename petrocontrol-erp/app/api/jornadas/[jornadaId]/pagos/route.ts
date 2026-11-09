@@ -1,6 +1,7 @@
 import { Prisma } from '@/generated/prisma';
 import { db } from '@/lib/db';
 import { pagoSchema } from '@/lib/validation/pagos';
+import { recalcularCaja } from '@/lib/jornadas-servicio';
 import { NextResponse } from 'next/server';
 
 export async function GET(
@@ -48,6 +49,11 @@ export async function POST(
       );
     }
 
+    const existe = await db.jornada.findUnique({ where: { id: jornadaIdNumber }, select: { id: true } });
+    if (!existe) {
+      return NextResponse.json({ error: 'La jornada no existe.' }, { status: 404 });
+    }
+
     const data = parsed.data;
     const pago = await db.pagoJornada.create({
       data: {
@@ -58,8 +64,11 @@ export async function POST(
       },
     });
 
+    // Mantiene importeDeclarado / diferenciaCaja al día (también en jornadas ya cerradas)
+    await recalcularCaja(jornadaIdNumber);
+
     if (!contentType.includes('application/json')) {
-      return NextResponse.redirect(new URL('/jornadas', request.url));
+      return NextResponse.redirect(new URL(`/jornadas/${jornadaIdNumber}`, request.url), 303);
     }
 
     return NextResponse.json({ ok: true, pago }, { status: 201 });

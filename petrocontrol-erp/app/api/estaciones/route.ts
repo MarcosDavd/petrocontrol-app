@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     });
 
     if (!contentType.includes('application/json')) {
-      return NextResponse.redirect(new URL('/maestros', request.url));
+      return NextResponse.redirect(new URL('/estaciones', request.url), 303);
     }
 
     return NextResponse.json({ ok: true, estacion }, { status: 201 });

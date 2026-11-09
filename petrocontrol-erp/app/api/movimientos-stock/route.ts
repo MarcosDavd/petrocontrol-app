@@ -2,6 +2,7 @@ import { Prisma } from '@/generated/prisma';
 import { db } from '@/lib/db';
 import { movimientoStockSchema } from '@/lib/validation/inventario';
 import { NextResponse } from 'next/server';
+import { fechaHoraLima } from '@/lib/zona-horaria';
 
 export async function GET() {
   const movimientos = await db.movimientoStock.findMany({
@@ -43,7 +44,7 @@ export async function POST(request: Request) {
       galones = Math.abs(galonesRaw);
     }
 
-    if (parsed.data.tipo === 'VENTA' || parsed.data.tipo === 'MERMA') {
+    if (parsed.data.tipo === 'MERMA') {
       galones = -Math.abs(galonesRaw);
     }
 
@@ -52,14 +53,18 @@ export async function POST(request: Request) {
         tanqueId: parsed.data.tanqueId,
         tipo: parsed.data.tipo,
         galones: new Prisma.Decimal(galones.toString()),
-        fecha: parsed.data.fecha ? new Date(parsed.data.fecha) : new Date(),
+        // "YYYY-MM-DD" = mediodía en hora de Perú (new Date('YYYY-MM-DD') sería medianoche UTC = día anterior en Perú)
+        fecha: parsed.data.fecha
+          ? /^\d{4}-\d{2}-\d{2}$/.test(parsed.data.fecha)
+            ? fechaHoraLima(parsed.data.fecha, '12:00')
+            : new Date(parsed.data.fecha)
+          : new Date(),
         nota: parsed.data.nota || null,
-        jornadaId: parsed.data.jornadaId ? parsed.data.jornadaId : null,
       },
     });
 
     if (!contentType.includes('application/json')) {
-      return NextResponse.redirect(new URL('/inventario', request.url));
+      return NextResponse.redirect(new URL('/inventario', request.url), 303);
     }
 
     return NextResponse.json({ ok: true, movimiento }, { status: 201 });

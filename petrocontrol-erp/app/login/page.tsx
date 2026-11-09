@@ -40,62 +40,73 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-950 px-4 py-12 text-slate-100">
-      <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900/80 p-8 shadow-2xl shadow-slate-950/50 backdrop-blur-sm">
-        <div className="mb-8 text-center">
-          <p className="text-sm font-medium uppercase tracking-[0.2em] text-cyan-400">
-            PetroControl ERP
-          </p>
-          <h1 className="mt-3 text-3xl font-bold text-white">Iniciar sesión</h1>
+    <main className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-background px-4 py-10">
+      {/* Franja de marca superior */}
+      <div className="absolute inset-x-0 top-0 flex h-1.5" aria-hidden>
+        <span className="flex-1 bg-gl-verde" />
+        <span className="flex-1 bg-gl-amarillo" />
+        <span className="flex-1 bg-gl-rojo" />
+      </div>
+
+      <div className="w-full max-w-sm sm:max-w-md">
+        <div className="mb-6 flex flex-col items-center text-center sm:mb-8">
+          <picture>
+            <source srcSet="/brand/isotipo-blanco.svg" media="(prefers-color-scheme: dark)" />
+            <img src="/brand/isotipo.svg" alt="Grifos Lim" className="h-20 w-auto sm:h-24" />
+          </picture>
+          <h1 className="mt-4 text-2xl font-bold tracking-tight text-fg sm:text-3xl">GL-App</h1>
+          <p className="mt-1 text-sm text-muted">Gestión de estaciones · Grifos Lim</p>
         </div>
 
-        <form className="space-y-5" onSubmit={handleSubmit}>
-          <div>
-            <label htmlFor="email" className="mb-2 block text-sm font-medium text-slate-200">
-              Correo electrónico
-            </label>
-            <input
-              id="email"
-              type="email"
-              autoComplete="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-base text-white outline-none transition focus:border-cyan-400"
-              placeholder="dueno@petrocontrol.pe"
-              required
-            />
-          </div>
+        <div className="card p-6 sm:p-8">
+          <h2 className="mb-6 text-lg font-semibold text-fg">Iniciar sesión</h2>
 
-          <div>
-            <label htmlFor="password" className="mb-2 block text-sm font-medium text-slate-200">
-              Contraseña
-            </label>
-            <input
-              id="password"
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-base text-white outline-none transition focus:border-cyan-400"
-              placeholder="••••••••"
-              required
-            />
-          </div>
-
-          {error ? (
-            <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
-              {error}
+          <form className="space-y-5" onSubmit={handleSubmit}>
+            <div>
+              <label htmlFor="email" className="label text-sm">
+                Correo electrónico
+              </label>
+              <input
+                id="email"
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                className="field py-3"
+                placeholder="dueno@petrocontrol.pe"
+                required
+              />
             </div>
-          ) : null}
 
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full rounded-xl bg-cyan-500 px-4 py-3 text-base font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isLoading ? 'Iniciando sesión...' : 'Ingresar'}
-          </button>
-        </form>
+            <div>
+              <label htmlFor="password" className="label text-sm">
+                Contraseña
+              </label>
+              <input
+                id="password"
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className="field py-3"
+                placeholder="••••••••"
+                required
+              />
+            </div>
+
+            {error ? (
+              <div role="alert" className="rounded-lg border border-danger/40 bg-danger-light px-3 py-2 text-sm text-danger">
+                {error}
+              </div>
+            ) : null}
+
+            <button type="submit" disabled={isLoading} className="btn-primary w-full py-3 text-base">
+              {isLoading ? 'Iniciando sesión...' : 'Ingresar'}
+            </button>
+          </form>
+        </div>
+
+        <p className="mt-6 text-center text-xs text-muted">© {new Date().getFullYear()} Grifos Lim</p>
       </div>
     </main>
   );

@@ -1,0 +1,68 @@
+/* Grifos Lim — paleta de la app */
+:root {
+  --gl-verde: #0F6B34;
+  --gl-verde-700: #0A5128;
+  --gl-verde-500: #1E8A4C;
+  --gl-verde-100: #E3F2E8;
+  --gl-amarillo: #F2B705;
+  --gl-amarillo-700: #C99400;
+  --gl-amarillo-100: #FFF6D6;
+  --gl-rojo: #C62828;
+  --gl-rojo-700: #931D1D;
+  --gl-rojo-100: #FBE5E5;
+  --gl-grafito: #1C1C1E;
+  --gl-grafito-700: #2C2C2E;
+  --gl-gris-500: #6B6B70;
+  --gl-gris-300: #D9D9D6;
+  --gl-gris-100: #F0F0EE;
+  --gl-fondo: #F8F8F6;
+  --gl-blanco: #FFFFFF;
+
+  --color-primary: #0F6B34;
+  --color-primary-hover: #0A5128;
+  --color-primary-light: #E3F2E8;
+  --color-on-primary: #FFFFFF;
+  --color-accent: #F2B705;
+  --color-accent-hover: #C99400;
+  --color-accent-light: #FFF6D6;
+  --color-on-accent: #1C1C1E;
+  --color-danger: #C62828;
+  --color-danger-hover: #931D1D;
+  --color-danger-light: #FBE5E5;
+  --color-on-danger: #FFFFFF;
+  --color-success: #1E8A4C;
+  --color-warning: #F2B705;
+  --color-error: #C62828;
+  --color-text: #1C1C1E;
+  --color-text-muted: #6B6B70;
+  --color-border: #D9D9D6;
+  --color-surface: #FFFFFF;
+  --color-surface-alt: #F0F0EE;
+  --color-background: #F8F8F6;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-primary: #2EA35E;
+    --color-primary-hover: #3BBA6E;
+    --color-primary-light: #12301E;
+    --color-on-primary: #FFFFFF;
+    --color-accent: #F2B705;
+    --color-accent-hover: #C99400;
+    --color-accent-light: #3A2E05;
+    --color-on-accent: #1C1C1E;
+    --color-danger: #E5484D;
+    --color-danger-hover: #931D1D;
+    --color-danger-light: #3A1415;
+    --color-on-danger: #FFFFFF;
+    --color-success: #1E8A4C;
+    --color-warning: #F2B705;
+    --color-error: #C62828;
+    --color-text: #F2F2F0;
+    --color-text-muted: #A1A1A6;
+    --color-border: #3A3A3C;
+    --color-surface: #242426;
+    --color-surface-alt: #2C2C2E;
+    --color-background: #1C1C1E;
+  }
+}

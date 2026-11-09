@@ -1,12 +1,15 @@
 generator client {
-  provider = "prisma-client-js"
-  output   = "../generated/prisma"
+  provider      = "prisma-client-js"
+  output        = "../generated/prisma"
+  // native: tu PC · rhel-openssl-3.0.x: funciones serverless de Netlify/Vercel (Amazon Linux 2023)
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
 // ============================================================
 // PetroControl - Modelo de datos (Prisma + PostgreSQL)
 // Un solo usuario (el dueño). Unidad de medida: GALONES. Moneda: soles (PEN).
@@ -31,17 +34,16 @@ model Usuario {
 // ------------------------------------------------------------
 
 model Estacion {
-  id        Int        @id @default(autoincrement())
+  id        Int      @id @default(autoincrement())
   nombre    String
   direccion String?
-  activa    Boolean    @default(true)
-  createdAt DateTime   @default(now())
+  activa    Boolean  @default(true)
+  createdAt DateTime @default(now())
 
   maquinas  Maquina[]
   tanques   Tanque[]
   empleados Empleado[]
   jornadas  Jornada[]
-  gastos    Gasto[]
 }
 
 enum DireccionContador {
@@ -49,29 +51,41 @@ enum DireccionContador {
   BAJA
 }
 
-// Cada máquina tiene un contador general (8 dígitos, máx. 99999999, vuelve a 0)
-// y 6 contadores por producto (3 productos x 2 lados: atrás / adelante).
-// Un empleado atiende toda la máquina (ambos lados).
+// Cada máquina tiene un contador general (opcional) y, por cada producto que despacha,
+// dos contadores: manguera de atrás y manguera de adelante.
+// Un empleado atiende toda la máquina (ambas mangueras de todos sus productos).
 model Maquina {
   id         Int      @id @default(autoincrement())
   estacionId Int
   estacion   Estacion @relation(fields: [estacionId], references: [id])
-  nombre     String   // ej: "Máquina 1"
+  nombre     String // ej: "Máquina 1"
   activa     Boolean  @default(true)
 
-  // Valor a partir del cual el contador vuelve a 0 (99999999 + 1).
+  // Valor (en centésimas de galón) a partir del cual el contador vuelve a 0.
+  // 100000000 centésimas = el contador pasa de 999999.99 a 0.
   // Fórmula: galones = (salida - entrada) mod modulo   (si SUBE)
   //          galones = (entrada - salida) mod modulo   (si BAJA)
   moduloContador       BigInt            @default(100000000)
   direccionTotalizador DireccionContador @default(BAJA) // contador general (a confirmar con prueba)
-  direccionProductos   DireccionContador @default(SUBE) // los 6 de la planilla (a confirmar)
+  direccionProductos   DireccionContador @default(SUBE) // contadores por manguera (en la planilla suben)
 
-  jornadas Jornada[]
+  productos MaquinaCombustible[]
+  jornadas  Jornada[]
 
   @@unique([estacionId, nombre])
 }
 
-// Diesel, Regular (Gasohol 90), Premium (Gasohol 95)
+// Productos que despacha cada máquina (cada uno con manguera atrás y adelante).
+model MaquinaCombustible {
+  maquinaId     Int
+  combustibleId Int
+  maquina       Maquina     @relation(fields: [maquinaId], references: [id], onDelete: Cascade)
+  combustible   Combustible @relation(fields: [combustibleId], references: [id])
+
+  @@id([maquinaId, combustibleId])
+}
+
+// Diesel, Regular (Gasohol 90), Premium (Gasohol 95), GLP
 model Combustible {
   id     Int    @id @default(autoincrement())
   nombre String @unique
@@ -79,6 +93,7 @@ model Combustible {
   precios  HistorialPrecio[]
   tanques  Tanque[]
   lecturas LecturaJornada[]
+  maquinas MaquinaCombustible[]
 }
 
 // El precio vigente es el último con vigenteDesde <= fecha de la jornada.
@@ -113,9 +128,9 @@ model Tanque {
 
 enum TipoMovimiento {
   RECARGA // entrada por cisterna (+)
-  VENTA   // generado al cerrar una jornada (-)
-  AJUSTE  // corrección manual (+/-)
-  MERMA   // pérdida (-)
+  VENTA // generado al cerrar una jornada (-)
+  AJUSTE // corrección manual (+/-)
+  MERMA // pérdida (-)
 }
 
 model MovimientoStock {
@@ -141,8 +156,8 @@ model Empleado {
   nombre        String
   estacionId    Int
   estacion      Estacion @relation(fields: [estacionId], references: [id])
-  horarioInicio String?  // "06:00"
-  horarioFin    String?  // "14:00" (puede cruzar medianoche)
+  horarioInicio String? // "06:00"
+  horarioFin    String? // "14:00" (puede cruzar medianoche)
   activo        Boolean  @default(true)
   createdAt     DateTime @default(now())
 
@@ -171,13 +186,13 @@ model Jornada {
   estado     EstadoJornada @default(ABIERTA)
   notas      String?
 
-  // Contador general de la máquina (8 dígitos). Control cruzado.
-  totalizadorEntrada Decimal  @db.Decimal(12, 2)
+  // Contador general de la máquina (opcional). Control cruzado.
+  totalizadorEntrada Decimal? @db.Decimal(12, 2)
   totalizadorSalida  Decimal? @db.Decimal(12, 2)
   galonesTotalizador Decimal? @db.Decimal(12, 2)
 
   // Calculados y congelados al cerrar la jornada
-  galonesProductos  Decimal? @db.Decimal(12, 2) // suma de los 6 contadores
+  galonesProductos  Decimal? @db.Decimal(12, 2) // suma de los galones de todos los productos
   diferenciaControl Decimal? @db.Decimal(12, 2) // totalizador - productos (debe ser 0)
   importeEsperado   Decimal? @db.Decimal(12, 2) // suma de importes por producto
   importeDeclarado  Decimal? @db.Decimal(12, 2) // suma de pagos (incluye descuentos)
@@ -192,7 +207,9 @@ model Jornada {
   @@index([estacionId, inicio])
 }
 
-// Una fila por producto. Cada producto tiene 4 valores: entrada/salida x atrás/adelante.
+// Una fila por producto (equivale a una fila de la planilla Excel).
+//   entrada = ANTERIOR (cómo recibe el empleado los contadores)
+//   salida  = ACTUAL   (cómo los deja al terminar su jornada)
 // galones = (Δ atrás) + (Δ adelante), con Δ según direccionProductos y moduloContador.
 model LecturaJornada {
   id            Int         @id @default(autoincrement())
@@ -206,6 +223,13 @@ model LecturaJornada {
   salidaAtras     Decimal? @db.Decimal(12, 2)
   salidaAdelante  Decimal? @db.Decimal(12, 2)
 
+  // Galones que se movieron entre la jornada anterior de la máquina y esta
+  // (ANTERIOR de esta jornada - ACTUAL de la jornada previa). Debe ser 0.
+  //   > 0: se despachó combustible fuera de toda jornada (posible faltante)
+  //   < 0: el contador retrocedió (error de digitación)
+  // null: no hay jornada previa con la que comparar.
+  diferenciaApertura Decimal? @db.Decimal(12, 2)
+
   huboReinicio   Boolean  @default(false) // el contador pasó por 0 (confirmado por el usuario)
   galones        Decimal? @db.Decimal(12, 2)
   precioUnitario Decimal? @db.Decimal(10, 2) // congelado al cerrar
@@ -218,7 +242,7 @@ enum MedioPago {
   EFECTIVO
   TARJETA
   TRANSFERENCIA // incluye Yape/Plin salvo que se quiera separar
-  DESCUENTO     // a definir con el dueño: vales, crédito, consumo propio, etc.
+  DESCUENTO // a definir con el dueño: vales, crédito, consumo propio, etc.
 }
 
 // Lo que el empleado entrega. La suma debe igualar importeEsperado.
@@ -228,23 +252,7 @@ model PagoJornada {
   jornada   Jornada   @relation(fields: [jornadaId], references: [id], onDelete: Cascade)
   medio     MedioPago
   monto     Decimal   @db.Decimal(12, 2)
-  nota      String?   // ej: a quién se hizo el descuento
+  nota      String? // ej: a quién se hizo el descuento
 
   @@index([jornadaId])
-}
-
-// ------------------------------------------------------------
-// GASTOS
-// ------------------------------------------------------------
-
-model Gasto {
-  id          Int      @id @default(autoincrement())
-  estacionId  Int
-  estacion    Estacion @relation(fields: [estacionId], references: [id])
-  categoria   String   // Servicios, Mantenimiento, Personal, Logística, Otros
-  descripcion String
-  monto       Decimal  @db.Decimal(12, 2)
-  fecha       DateTime
-
-  @@index([estacionId, fecha])
 }

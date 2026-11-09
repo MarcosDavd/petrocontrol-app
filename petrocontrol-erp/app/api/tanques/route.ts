@@ -61,7 +61,7 @@ export async function POST(request: Request) {
     });
 
     if (!contentType.includes('application/json')) {
-      return NextResponse.redirect(new URL('/inventario', request.url));
+      return NextResponse.redirect(new URL('/inventario', request.url), 303);
     }
 
     return NextResponse.json({ ok: true, tanque }, { status: 201 });
