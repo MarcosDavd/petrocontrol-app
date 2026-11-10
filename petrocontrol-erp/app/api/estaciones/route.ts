@@ -3,6 +3,9 @@ import { responderError } from '@/lib/respuesta-formulario';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { estacionSchema } from '@/lib/validation/maestros';
+import { leerPreciosIniciales } from '@/lib/precios';
+import { fechaHoraLima, hoyLima } from '@/lib/zona-horaria';
+import { Prisma } from '@/generated/prisma';
 
 export async function GET() {
   const estaciones = await db.estacion.findMany({
@@ -25,12 +28,27 @@ export async function POST(request: Request) {
       return responderError(request, parsed.error.issues[0]?.message ?? 'Datos inválidos.', 400);
     }
 
+    // Una estación nueva nace con precio para todos los productos: sin precio no se pueden cerrar jornadas
+    const combustibles = await db.combustible.findMany({ select: { id: true, nombre: true }, orderBy: { id: 'asc' } });
+    const iniciales = leerPreciosIniciales(rawData, combustibles);
+    if (!iniciales.ok) {
+      return responderError(request, iniciales.error, 400);
+    }
+
     const data = parsed.data;
+    const vigenteDesde = fechaHoraLima(hoyLima());
     const estacion = await db.estacion.create({
       data: {
         nombre: data.nombre,
         direccion: data.direccion || null,
         activa: data.activa ?? true,
+        precios: {
+          create: iniciales.precios.map(({ combustibleId, precio }) => ({
+            combustibleId,
+            precio: new Prisma.Decimal(precio),
+            vigenteDesde,
+          })),
+        },
       },
     });
 

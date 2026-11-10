@@ -46,16 +46,6 @@ async function main() {
     });
     combustibles.push(combustible);
 
-    const tienePrecio = await prisma.historialPrecio.count({ where: { combustibleId: combustible.id } });
-    if (!tienePrecio && item.precio) {
-      await prisma.historialPrecio.create({
-        data: {
-          combustibleId: combustible.id,
-          precio: new Prisma.Decimal(item.precio),
-          vigenteDesde: new Date('2026-01-01T00:00:00-05:00'),
-        },
-      });
-    }
   }
 
   const liquidos = combustibles.filter((c) => c.nombre !== 'GLP');
@@ -83,6 +73,24 @@ async function main() {
   }
 
   for (const estacion of estaciones) {
+    // Precios por galón: cada estación tiene los suyos (al inicio, los de la planilla en todas)
+    for (const item of COMBUSTIBLES) {
+      const combustible = combustibles.find((c) => c.nombre === item.nombre)!;
+      const tienePrecio = await prisma.historialPrecio.count({
+        where: { estacionId: estacion.id, combustibleId: combustible.id },
+      });
+      if (!tienePrecio && item.precio) {
+        await prisma.historialPrecio.create({
+          data: {
+            estacionId: estacion.id,
+            combustibleId: combustible.id,
+            precio: new Prisma.Decimal(item.precio),
+            vigenteDesde: new Date('2026-01-01T00:00:00-05:00'),
+          },
+        });
+      }
+    }
+
     // Máquinas de líquidos: Diesel, Regular y Premium (manguera atrás y adelante cada uno)
     for (let index = 1; index <= 2; index += 1) {
       const maquina = await prisma.maquina.upsert({

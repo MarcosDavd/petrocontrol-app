@@ -3,6 +3,7 @@ import { Building2, ChevronRight, Monitor, Plus } from 'lucide-react';
 import { db } from '@/lib/db';
 import { EmptyState, PageHeader } from '@/components/page-header';
 import { BotonEstado } from '@/components/boton-estado';
+import { campoPrecio } from '@/lib/precios';
 
 export const metadata = { title: 'Estaciones y máquinas' };
 
@@ -33,8 +34,35 @@ export default async function EstacionesPage() {
               <input name="nombre" placeholder="Nombre de la estación" aria-label="Nombre de la estación" className="field" required />
               <input name="direccion" placeholder="Dirección" aria-label="Dirección" className="field" />
             </div>
+            {/* Obligatorio: sin precio no se podrían cerrar jornadas en la estación */}
+            <fieldset>
+              <legend className="label">Precio por galón en esta estación (S/)</legend>
+              {combustibles.length === 0 ? (
+                <p className="text-sm text-danger">Primero crea al menos un producto en Productos y precios.</p>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {combustibles.map((combustible) => (
+                    <label key={combustible.id} className="flex items-center gap-3 text-sm text-fg">
+                      <span className="w-20 shrink-0">{combustible.nombre}</span>
+                      <input
+                        name={campoPrecio(combustible.id)}
+                        type="number"
+                        inputMode="decimal"
+                        step="0.01"
+                        min="0.01"
+                        placeholder="0.00"
+                        className="field"
+                        required
+                      />
+                    </label>
+                  ))}
+                </div>
+              )}
+            </fieldset>
             <input type="hidden" name="activa" value="true" />
-            <button type="submit" className="btn-primary w-full sm:w-auto">Guardar estación</button>
+            <button type="submit" disabled={combustibles.length === 0} className="btn-primary w-full sm:w-auto">
+              Guardar estación
+            </button>
           </form>
         </div>
 

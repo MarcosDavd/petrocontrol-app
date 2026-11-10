@@ -44,6 +44,7 @@ model Estacion {
   tanques   Tanque[]
   empleados Empleado[]
   jornadas  Jornada[]
+  precios   HistorialPrecio[]
 }
 
 enum DireccionContador {
@@ -97,14 +98,17 @@ model Combustible {
 }
 
 // El precio vigente es el último con vigenteDesde <= fecha de la jornada.
+// Precio por galón de un producto EN UNA ESTACIÓN (cada estación tiene sus precios).
 model HistorialPrecio {
   id            Int         @id @default(autoincrement())
+  estacionId    Int
+  estacion      Estacion    @relation(fields: [estacionId], references: [id])
   combustibleId Int
   combustible   Combustible @relation(fields: [combustibleId], references: [id])
   precio        Decimal     @db.Decimal(10, 2) // soles por galón
   vigenteDesde  DateTime
 
-  @@index([combustibleId, vigenteDesde])
+  @@index([estacionId, combustibleId, vigenteDesde])
 }
 
 // ------------------------------------------------------------

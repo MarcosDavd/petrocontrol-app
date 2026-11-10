@@ -165,7 +165,7 @@ export async function cerrarJornada(
 ) {
   const jornada = await db.jornada.findUnique({
     where: { id: jornadaId },
-    include: { maquina: true, empleado: true, lecturas: { include: { combustible: true } }, pagos: true },
+    include: { maquina: true, empleado: true, estacion: true, lecturas: { include: { combustible: true } }, pagos: true },
   });
   if (!jornada) throw new ErrorNegocio('La jornada no existe.');
   if (jornada.estado !== 'ABIERTA') throw new ErrorNegocio('La jornada ya está cerrada.');
@@ -183,6 +183,7 @@ export async function cerrarJornada(
   }
 
   const { maquina } = jornada;
+  const estacionNombre = jornada.estacion.nombre;
   const tanques = await db.tanque.findMany({ where: { estacionId: jornada.estacionId } });
 
   const cierres = await Promise.all(
@@ -204,18 +205,23 @@ export async function cerrarJornada(
         { modulo: maquina.moduloContador, direccion: maquina.direccionProductos, producto }
       );
 
+      // Precio de ESTA estación vigente al inicio de la jornada (cada estación tiene los suyos)
       const precio = await db.historialPrecio.findFirst({
-        where: { combustibleId: lectura.combustibleId, vigenteDesde: { lte: jornada.inicio } },
+        where: {
+          estacionId: jornada.estacionId,
+          combustibleId: lectura.combustibleId,
+          vigenteDesde: { lte: jornada.inicio },
+        },
         orderBy: { vigenteDesde: 'desc' },
       });
       if (!precio) {
         throw new ErrorNegocio(
-          `${producto} no tiene un precio vigente al ${formatoFecha(jornada.inicio)}. Regístralo en Productos y precios.`
+          `${producto} no tiene precio en ${estacionNombre} vigente al ${formatoFecha(jornada.inicio)}. Regístralo en Productos y precios.`
         );
       }
 
       const tanque = tanques.find((item) => item.combustibleId === lectura.combustibleId);
-      if (!tanque) throw new ErrorNegocio(`La estación no tiene un tanque de ${producto}. Créalo en Inventario.`);
+      if (!tanque) throw new ErrorNegocio(`La estación no tiene un tanque de ${producto}. Créalo en Estaciones y máquinas.`);
 
       const precioUnitario = aCentesimas(precio.precio);
       return {
