@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { campoPrecio, fechaVigencia, leerPreciosIniciales } from './precios';
+import { campoPrecio, campoPrecioEstacion, fechaVigencia, leerPreciosIniciales, leerPreciosNuevoProducto } from './precios';
 import { fechaHoraLima } from './zona-horaria';
 
 const PRODUCTOS = [
@@ -33,6 +33,39 @@ describe('leerPreciosIniciales', () => {
 
   it('exige que exista al menos un producto', () => {
     expect(leerPreciosIniciales({}, [])).toEqual({ ok: false, error: expect.stringContaining('Primero crea') });
+  });
+});
+
+describe('leerPreciosNuevoProducto', () => {
+  const ESTACIONES = [
+    { id: 2, nombre: 'Pachas' },
+    { id: 1, nombre: 'Tunan' },
+  ];
+
+  it('devuelve un precio por cada estación', () => {
+    const r = leerPreciosNuevoProducto({ [campoPrecioEstacion(2)]: '9.10', [campoPrecioEstacion(1)]: '9,25' }, ESTACIONES);
+    expect(r).toEqual({
+      ok: true,
+      precios: [
+        { estacionId: 2, precio: '9.10' },
+        { estacionId: 1, precio: '9.25' },
+      ],
+    });
+  });
+
+  it('no permite crear el producto si falta el precio en alguna estación', () => {
+    const r = leerPreciosNuevoProducto({ [campoPrecioEstacion(2)]: '9.10' }, ESTACIONES);
+    expect(r).toEqual({ ok: false, error: expect.stringContaining('Falta el precio en Tunan') });
+  });
+
+  it('rechaza precios en 0 o con más de 2 decimales', () => {
+    for (const valor of ['0', '9.999', 'x']) {
+      expect(leerPreciosNuevoProducto({ [campoPrecioEstacion(2)]: valor, [campoPrecioEstacion(1)]: '9' }, ESTACIONES).ok, valor).toBe(false);
+    }
+  });
+
+  it('sin estaciones no pide precios', () => {
+    expect(leerPreciosNuevoProducto({}, [])).toEqual({ ok: true, precios: [] });
   });
 });
 

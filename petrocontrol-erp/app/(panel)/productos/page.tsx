@@ -2,6 +2,7 @@ import { History, Plus, Tag } from 'lucide-react';
 import { db } from '@/lib/db';
 import { EmptyState, PageHeader } from '@/components/page-header';
 import { formatoFecha, formatoSoles } from '@/lib/formato';
+import { campoPrecioEstacion } from '@/lib/precios';
 
 export const metadata = { title: 'Productos y precios' };
 
@@ -162,12 +163,38 @@ export default async function ProductosPage() {
 
         <div className="card">
           <h2 className="card-title"><Plus className="h-5 w-5 text-primary" aria-hidden />Nuevo producto</h2>
-          <form action="/api/combustibles" method="post" className="flex flex-col gap-3 sm:flex-row">
-            <input name="nombre" placeholder="Nombre del producto" aria-label="Nombre del producto" className="field" required />
-            <button type="submit" className="btn-ghost shrink-0">Crear</button>
+          <form action="/api/combustibles" method="post" className="space-y-3">
+            <div>
+              <label htmlFor="np-nombre" className="label">Nombre</label>
+              <input id="np-nombre" name="nombre" placeholder="Ej. Gas natural" minLength={2} className="field" required />
+            </div>
+            {/* Obligatorio: sin precio en una estación no se podrían cerrar sus jornadas */}
+            {estaciones.length > 0 && (
+              <fieldset>
+                <legend className="label">Precio por galón en cada estación (S/)</legend>
+                <div className="space-y-2">
+                  {estaciones.map((estacion) => (
+                    <label key={estacion.id} className="flex items-center gap-3 text-sm text-fg">
+                      <span className="w-24 shrink-0 truncate">{estacion.nombre}</span>
+                      <input
+                        name={campoPrecioEstacion(estacion.id)}
+                        type="number"
+                        inputMode="decimal"
+                        step="0.01"
+                        min="0.01"
+                        placeholder="0.00"
+                        className="field"
+                        required
+                      />
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            )}
+            <button type="submit" className="btn-ghost w-full sm:w-auto">Crear producto</button>
           </form>
           <p className="mt-2 text-xs text-muted">
-            Después regístrale un precio en cada estación, asígnalo a sus máquinas y crea su tanque en Estaciones y máquinas.
+            Después asígnalo a sus máquinas y crea su tanque en Estaciones y máquinas.
           </p>
         </div>
       </section>
