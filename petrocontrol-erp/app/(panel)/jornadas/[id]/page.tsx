@@ -1,25 +1,26 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Banknote, Gauge, StopCircle, Trash2 } from 'lucide-react';
+import { ArrowLeft, Banknote, CircleCheck, Gauge, Pencil, StopCircle, Trash2 } from 'lucide-react';
 import { db } from '@/lib/db';
 import { PageHeader } from '@/components/page-header';
 import { AlertasJornada } from '@/components/alertas-jornada';
 import { formatoFechaHora, formatoGalones, formatoNumero, formatoSoles } from '@/lib/formato';
 import { eliminarPagoAction } from '../actions';
 import { CerrarJornadaForm } from './cerrar-jornada-form';
+import { ETIQUETA_MEDIO, type MedioPago } from '@/lib/pagos';
 import { sugerirFechaFin } from '@/lib/turnos';
 
 export const metadata = { title: 'Detalle de jornada' };
 
-const MEDIOS: Record<string, string> = {
-  EFECTIVO: 'Efectivo',
-  TARJETA: 'Tarjeta',
-  TRANSFERENCIA: 'Transferencia / Yape / Plin',
-  DESCUENTO: 'Descuento / vale',
-};
-
-export default async function JornadaDetallePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function JornadaDetallePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ editada?: string }>;
+}) {
   const { id } = await params;
+  const { editada } = await searchParams;
   const jornadaId = Number(id);
   if (!Number.isInteger(jornadaId) || jornadaId <= 0) notFound();
 
@@ -36,6 +37,19 @@ export default async function JornadaDetallePage({ params }: { params: Promise<{
   if (!jornada) notFound();
 
   const abierta = jornada.estado === 'ABIERTA';
+
+  // Precio de la estación vigente al inicio de la jornada, por producto (para el resumen del cierre)
+  const precios = abierta
+    ? await db.historialPrecio.findMany({
+        where: {
+          estacionId: jornada.estacionId,
+          combustibleId: { in: jornada.lecturas.map((l) => l.combustibleId) },
+          vigenteDesde: { lte: jornada.inicio },
+        },
+        orderBy: { vigenteDesde: 'desc' },
+      })
+    : [];
+  const precioDe = (combustibleId: number) => precios.find((p) => p.combustibleId === combustibleId)?.precio.toString() ?? null;
   const declarado = jornada.pagos.reduce((total, pago) => total + Number(pago.monto), 0);
   const esperado = jornada.importeEsperado === null ? null : Number(jornada.importeEsperado);
   const diferencia = esperado === null ? null : esperado - declarado;
@@ -51,8 +65,22 @@ export default async function JornadaDetallePage({ params }: { params: Promise<{
         description={`${jornada.estacion.nombre}. Desde ${formatoFechaHora(jornada.inicio)}${
           jornada.fin ? ` hasta ${formatoFechaHora(jornada.fin)}` : ', en curso'
         }`}
-        actions={<span className={abierta ? 'badge-warning text-sm' : 'badge-success text-sm'}>{abierta ? 'Abierta' : 'Cerrada'}</span>}
+        actions={
+          <div className="flex items-center gap-3">
+            <span className={abierta ? 'badge-warning text-sm' : 'badge-success text-sm'}>{abierta ? 'Abierta' : 'Cerrada'}</span>
+            <Link href={`/jornadas/${jornada.id}/editar`} className="btn-ghost px-3 py-2">
+              <Pencil className="h-4 w-4" aria-hidden />Editar jornada
+            </Link>
+          </div>
+        }
       />
+
+      {editada && (
+        <p role="status" className="flex items-center gap-2 border-l-4 border-primary bg-primary-light px-4 py-3 text-sm text-fg">
+          <CircleCheck className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+          Cambios guardados.{!abierta && ' Se recalcularon galones, importes, stock y cuadre de caja.'}
+        </p>
+      )}
 
       {!abierta && <AlertasJornada jornada={jornada} />}
 
@@ -125,7 +153,7 @@ export default async function JornadaDetallePage({ params }: { params: Promise<{
 
       {abierta && (
         <section className="card">
-          <h2 className="card-title"><StopCircle className="h-5 w-5 text-primary" aria-hidden />Cerrar jornada (lecturas ACTUAL)</h2>
+          <h2 className="card-title"><StopCircle className="h-5 w-5 text-primary" aria-hidden />Cerrar jornada</h2>
           <CerrarJornadaForm
             jornadaId={jornada.id}
             modulo={jornada.maquina.moduloContador.toString()}
@@ -140,67 +168,80 @@ export default async function JornadaDetallePage({ params }: { params: Promise<{
               nombre: lectura.combustible.nombre,
               entradaAtras: lectura.entradaAtras.toString(),
               entradaAdelante: lectura.entradaAdelante.toString(),
+              precio: precioDe(lectura.combustibleId),
+            }))}
+            pagosRegistrados={jornada.pagos.map((pago) => ({
+              id: pago.id,
+              medio: pago.medio,
+              monto: pago.monto.toString(),
+              nota: pago.nota,
             }))}
           />
         </section>
       )}
 
-      <section className="card">
-        <h2 className="card-title"><Banknote className="h-5 w-5 text-primary" aria-hidden />Entrega de dinero y cuadre de caja</h2>
+      {!abierta && (
+        <section className="card">
+          <h2 className="card-title"><Banknote className="h-5 w-5 text-primary" aria-hidden />Pagos y cuadre de caja</h2>
 
-        <div className="grid grid-cols-3 gap-2 rounded-xl border border-border bg-surface-alt/60 p-3 text-center">
-          <div>
-            <p className="text-xs text-muted">Esperado</p>
-            <p className="tabular-nums font-semibold">{esperado === null ? 'Al cerrar' : formatoSoles(esperado)}</p>
+          <div className="grid grid-cols-3 gap-2 rounded-xl border border-border bg-surface-alt/60 p-3 text-center">
+            <div>
+              <p className="text-xs text-muted">Esperado</p>
+              <p className="tabular-nums font-semibold">{esperado === null ? 'Al cerrar' : formatoSoles(esperado)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted">Declarado</p>
+              <p className="tabular-nums font-semibold">{formatoSoles(declarado)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted">
+                {diferencia === null ? 'Diferencia' : diferencia > 0.004 ? 'Faltante' : diferencia < -0.004 ? 'Sobrante' : 'Cuadrado'}
+              </p>
+              <p className={`tabular-nums font-semibold ${diferencia === null ? '' : diferencia > 0.004 ? 'text-danger' : diferencia < -0.004 ? 'text-warning' : 'text-success'}`}>
+                {diferencia === null ? '—' : formatoSoles(Math.abs(diferencia))}
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-xs text-muted">Declarado</p>
-            <p className="tabular-nums font-semibold">{formatoSoles(declarado)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted">
-              {diferencia === null ? 'Diferencia' : diferencia > 0.004 ? 'Faltante' : diferencia < -0.004 ? 'Sobrante' : 'Cuadrado'}
-            </p>
-            <p className={`tabular-nums font-semibold ${diferencia === null ? '' : diferencia > 0.004 ? 'text-danger' : diferencia < -0.004 ? 'text-warning' : 'text-success'}`}>
-              {diferencia === null ? '—' : formatoSoles(Math.abs(diferencia))}
-            </p>
-          </div>
-        </div>
 
-        {jornada.pagos.length > 0 && (
-          <ul className="mt-3 divide-y divide-border">
-            {jornada.pagos.map((pago) => (
-              <li key={pago.id} className="flex items-center justify-between gap-2 py-2 text-sm">
-                <span>
-                  {MEDIOS[pago.medio] ?? pago.medio}
-                  {pago.nota && <span className="text-muted"> ({pago.nota})</span>}
-                </span>
-                <span className="flex items-center gap-2">
-                  <span className="tabular-nums font-semibold">{formatoSoles(pago.monto)}</span>
-                  <form action={eliminarPagoAction}>
-                    <input type="hidden" name="pagoId" value={pago.id} />
-                    <input type="hidden" name="jornadaId" value={jornada.id} />
-                    <button type="submit" className="rounded p-1 text-muted hover:bg-danger-light hover:text-danger" aria-label="Eliminar pago">
-                      <Trash2 className="h-4 w-4" aria-hidden />
-                    </button>
-                  </form>
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
+          {jornada.pagos.length > 0 && (
+            <ul className="mt-3 divide-y divide-border">
+              {jornada.pagos.map((pago) => (
+                <li key={pago.id} className="flex items-center justify-between gap-2 py-2 text-sm">
+                  <span>
+                    {ETIQUETA_MEDIO[pago.medio as MedioPago] ?? pago.medio}
+                    {pago.nota && <span className="text-muted"> ({pago.nota})</span>}
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <span className="tabular-nums font-semibold">{formatoSoles(pago.monto)}</span>
+                    <form action={eliminarPagoAction}>
+                      <input type="hidden" name="pagoId" value={pago.id} />
+                      <input type="hidden" name="jornadaId" value={jornada.id} />
+                      <button type="submit" className="rounded p-1 text-muted hover:bg-danger-light hover:text-danger" aria-label="Eliminar pago">
+                        <Trash2 className="h-4 w-4" aria-hidden />
+                      </button>
+                    </form>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
 
-        <form action={`/api/jornadas/${jornada.id}/pagos`} method="post" className="mt-4 grid gap-2 sm:grid-cols-[1fr_1fr_1fr_auto]">
-          <select name="medio" aria-label="Medio de pago" className="field" defaultValue="EFECTIVO" required>
-            {Object.entries(MEDIOS).map(([valor, etiqueta]) => (
-              <option key={valor} value={valor}>{etiqueta}</option>
-            ))}
-          </select>
-          <input name="monto" type="number" inputMode="decimal" step="0.01" min="0" placeholder="Monto (S/)" aria-label="Monto" className="field" required />
-          <input name="nota" placeholder="Nota (opcional)" aria-label="Nota" className="field" />
-          <button type="submit" className="btn-accent">Registrar</button>
-        </form>
-      </section>
+          {/* Corrección posterior: un pago que se olvidó al cerrar */}
+          <details className="mt-4">
+            <summary className="cursor-pointer text-sm font-medium text-primary">Agregar un pago olvidado</summary>
+            <form action={`/api/jornadas/${jornada.id}/pagos`} method="post" className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_1fr_auto]">
+              <select name="medio" aria-label="Medio de pago" className="field" defaultValue="EFECTIVO" required>
+                {Object.entries(ETIQUETA_MEDIO).map(([valor, etiqueta]) => (
+                  <option key={valor} value={valor}>{etiqueta}</option>
+                ))}
+              </select>
+              <input name="monto" type="number" inputMode="decimal" step="0.01" min="0.01" placeholder="Monto (S/)" aria-label="Monto" className="field" required />
+              <input name="nota" placeholder="Nota (opcional)" aria-label="Nota" className="field" />
+              <button type="submit" className="btn-ghost">Agregar pago</button>
+            </form>
+          </details>
+        </section>
+      )}
     </div>
   );
 }

@@ -61,6 +61,7 @@ async function getDatos() {
       estacionId,
       horarioInicio,
       horarioFin,
+      enJornada: abiertas.find((jornada) => jornada.empleadoId === id)?.maquina.nombre ?? null,
     })),
     abiertas,
     cerradas,

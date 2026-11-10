@@ -25,6 +25,8 @@ export type EmpleadoOpcion = {
   estacionId: number;
   horarioInicio: string | null;
   horarioFin: string | null;
+  /** Máquina donde tiene una jornada abierta (no se le puede abrir otra), o null. */
+  enJornada: string | null;
 };
 
 function AvisoDiferencia({ previo, actual }: { previo: string | null; actual: string }) {
@@ -149,9 +151,13 @@ export function AbrirJornadaForm({ maquinas, empleados }: { maquinas: MaquinaOpc
           >
             <option value="">{maquina ? 'Selecciona empleado' : 'Primero elige la máquina'}</option>
             {empleadosEstacion.map((empleado) => (
-              <option key={empleado.id} value={empleado.id}>
+              <option key={empleado.id} value={empleado.id} disabled={empleado.enJornada !== null}>
                 {empleado.nombre}
-                {empleado.horarioInicio ? ` (${empleado.horarioInicio} – ${empleado.horarioFin ?? '—'})` : ''}
+                {empleado.enJornada
+                  ? ` (en jornada en ${empleado.enJornada})`
+                  : empleado.horarioInicio
+                    ? ` (${empleado.horarioInicio} – ${empleado.horarioFin ?? '—'})`
+                    : ''}
               </option>
             ))}
           </select>
