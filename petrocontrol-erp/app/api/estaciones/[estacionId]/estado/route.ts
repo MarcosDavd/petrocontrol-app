@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { responderError } from '@/lib/respuesta-formulario';
 import { db } from '@/lib/db';
 
 /** Activa o desactiva una estación. Body: activa=true|false */
@@ -6,7 +7,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ est
   const { estacionId } = await params;
   const id = Number(estacionId);
   if (!Number.isInteger(id) || id <= 0) {
-    return NextResponse.json({ error: 'Estación inválida.' }, { status: 400 });
+    return responderError(request, 'Estación inválida.', 400);
   }
 
   const contentType = request.headers.get('content-type') ?? '';
@@ -18,7 +19,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ est
   if (!activa) {
     const abierta = await db.jornada.findFirst({ where: { estacionId: id, estado: 'ABIERTA' } });
     if (abierta) {
-      return NextResponse.json({ error: 'La estación tiene jornadas abiertas. Ciérralas antes de desactivarla.' }, { status: 409 });
+      return responderError(request, 'La estación tiene jornadas abiertas. Ciérralas antes de deshabilitarla.', 409);
     }
   }
 

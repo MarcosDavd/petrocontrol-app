@@ -5,8 +5,14 @@ import { revalidatePath } from 'next/cache';
 import { getSessionFromCookies } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { ErrorNegocio } from '@/lib/errores';
-import { abrirJornada, cerrarJornada, recalcularCaja } from '@/lib/jornadas-servicio';
-import { abrirJornadaSchema, camposPorProducto, cerrarJornadaSchema } from '@/lib/validation/jornadas';
+import { abrirJornada, cerrarJornada, editarJornada, recalcularCaja } from '@/lib/jornadas-servicio';
+import {
+  abrirJornadaSchema,
+  camposPorProducto,
+  cerrarJornadaSchema,
+  editarJornadaSchema,
+  leerPagosCierre,
+} from '@/lib/validation/jornadas';
 
 export type EstadoFormulario = { error?: string };
 
@@ -67,6 +73,8 @@ export async function cerrarJornadaAction(_prev: EstadoFormulario, formData: For
   const atras = camposPorProducto(formData, 'salidaAtras');
   const adelante = camposPorProducto(formData, 'salidaAdelante');
   const reinicio = camposPorProducto(formData, 'reinicio');
+  const pagos = leerPagosCierre(formData.get('pagos'));
+  if (!pagos.ok) return { error: pagos.error };
 
   try {
     await cerrarJornada(parsed.data.jornadaId, {
@@ -80,6 +88,7 @@ export async function cerrarJornadaAction(_prev: EstadoFormulario, formData: For
         salidaAdelante: adelante.get(combustibleId) ?? '',
         huboReinicio: reinicio.has(combustibleId),
       })),
+      pagos: pagos.pagos,
     });
   } catch (error) {
     return mensajeDeError(error, 'CERRAR_JORNADA_ERROR');
@@ -87,6 +96,55 @@ export async function cerrarJornadaAction(_prev: EstadoFormulario, formData: For
 
   revalidarTodo();
   redirect(`/jornadas/${parsed.data.jornadaId}`);
+}
+
+export async function editarJornadaAction(_prev: EstadoFormulario, formData: FormData): Promise<EstadoFormulario> {
+  await exigirSesion();
+
+  const parsed = editarJornadaSchema.safeParse(Object.fromEntries(formData.entries()));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Datos inválidos.' };
+  const datos = parsed.data;
+
+  const entradaAtras = camposPorProducto(formData, 'entradaAtras');
+  const entradaAdelante = camposPorProducto(formData, 'entradaAdelante');
+  const salidaAtras = camposPorProducto(formData, 'salidaAtras');
+  const salidaAdelante = camposPorProducto(formData, 'salidaAdelante');
+  const reinicio = camposPorProducto(formData, 'reinicio');
+
+  try {
+    await editarJornada(datos.jornadaId, {
+      empleadoId: datos.empleadoId,
+      fecha: datos.fecha,
+      horaManual: datos.hora || undefined,
+      totalizadorEntrada: datos.totalizadorEntrada || undefined,
+      notas: datos.notas,
+      entradas: [...entradaAtras.keys()].map((combustibleId) => ({
+        combustibleId,
+        entradaAtras: entradaAtras.get(combustibleId) ?? '',
+        entradaAdelante: entradaAdelante.get(combustibleId) ?? '',
+      })),
+      // Solo llegan en jornadas cerradas
+      cierre: datos.fechaCierre
+        ? {
+            fecha: datos.fechaCierre,
+            horaManual: datos.horaCierre || undefined,
+            totalizadorSalida: datos.totalizadorSalida || undefined,
+            lecturas: [...salidaAtras.keys()].map((combustibleId) => ({
+              combustibleId,
+              salidaAtras: salidaAtras.get(combustibleId) ?? '',
+              salidaAdelante: salidaAdelante.get(combustibleId) ?? '',
+              huboReinicio: reinicio.has(combustibleId),
+            })),
+          }
+        : undefined,
+    });
+  } catch (error) {
+    return mensajeDeError(error, 'EDITAR_JORNADA_ERROR');
+  }
+
+  revalidarTodo();
+  revalidatePath(`/jornadas/${datos.jornadaId}`);
+  redirect(`/jornadas/${datos.jornadaId}?editada=1`);
 }
 
 export async function eliminarPagoAction(formData: FormData) {

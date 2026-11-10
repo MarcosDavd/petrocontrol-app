@@ -1,5 +1,13 @@
 export type MedioPago = 'EFECTIVO' | 'TARJETA' | 'TRANSFERENCIA' | 'DESCUENTO';
 
+/** Nombre de cada medio de pago tal como lo ve el usuario (en el orden de los selectores). */
+export const ETIQUETA_MEDIO: Record<MedioPago, string> = {
+  EFECTIVO: 'Efectivo',
+  TARJETA: 'Tarjeta',
+  TRANSFERENCIA: 'Transferencia / Yape / Plin',
+  DESCUENTO: 'Descuento / vale',
+};
+
 export type PagoResumenInput = {
   medio: MedioPago | string;
   monto: bigint;

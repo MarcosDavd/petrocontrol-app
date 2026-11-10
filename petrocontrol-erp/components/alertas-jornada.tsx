@@ -29,7 +29,7 @@ export function calcularAlertas(jornada: JornadaConAlertas) {
         const valor = n(lectura.diferenciaApertura);
         return `${lectura.combustible?.nombre ?? 'Producto'} ${valor > 0 ? '+' : ''}${formatoNumero(valor)} gal`;
       })
-      .join(' · ');
+      .join(', ');
     alertas.push({
       tono: 'danger',
       texto: saltos.length === 1 ? `Salto de contador: ${porProducto}` : `Salto de contador en ${saltos.length} productos`,

@@ -3,31 +3,37 @@ import { ChevronRight, Clock, Droplets, Fuel, Scale } from 'lucide-react';
 import { db } from '@/lib/db';
 import { getSessionFromCookies } from '@/lib/auth';
 import { PageHeader } from '@/components/page-header';
-import { NAV_ITEMS } from '@/components/nav-items';
+import { COLOR_TEXTO_NIVEL, Torta } from '@/components/torta-tanque';
+import { necesitaAtencion, obtenerResumenTanques } from '@/lib/tanques-servicio';
 import { formatoGalones, formatoSoles } from '@/lib/formato';
 import { inicioMesLima } from '@/lib/zona-horaria';
 
-export const metadata = { title: 'Dashboard' };
+export const metadata = { title: 'Inicio' };
 
 async function getResumen() {
   const inicioMes = inicioMesLima();
 
-  const [jornadasAbiertas, tanques, stock, cierresMes] = await Promise.all([
+  const [jornadasAbiertas, tanques, cierresMes] = await Promise.all([
     db.jornada.count({ where: { estado: 'ABIERTA' } }),
-    db.tanque.findMany({ select: { id: true, minimo: true } }),
-    db.movimientoStock.groupBy({ by: ['tanqueId'], _sum: { galones: true } }),
+    obtenerResumenTanques(),
     db.jornada.aggregate({
       where: { estado: 'CERRADA', inicio: { gte: inicioMes } },
       _sum: { galonesProductos: true, diferenciaCaja: true },
     }),
   ]);
 
-  const stockPorTanque = new Map(stock.map((s) => [s.tanqueId, Number(s._sum.galones ?? 0)]));
-  const tanquesBajoMinimo = tanques.filter((t) => (stockPorTanque.get(t.id) ?? 0) <= Number(t.minimo)).length;
+  // Tanques agrupados por estación, en el orden en que llegan (por estación y producto)
+  const porEstacion = new Map<number, { nombre: string; tanques: typeof tanques }>();
+  for (const tanque of tanques) {
+    const grupo = porEstacion.get(tanque.estacionId) ?? { nombre: tanque.estacion, tanques: [] };
+    grupo.tanques.push(tanque);
+    porEstacion.set(tanque.estacionId, grupo);
+  }
 
   return {
     jornadasAbiertas,
-    tanquesBajoMinimo,
+    estaciones: [...porEstacion.entries()].map(([id, grupo]) => ({ id, ...grupo })),
+    tanquesBajoMinimo: tanques.filter(necesitaAtencion).length,
     totalTanques: tanques.length,
     galonesMes: Number(cierresMes._sum.galonesProductos ?? 0),
     diferenciaCajaMes: Number(cierresMes._sum.diferenciaCaja ?? 0),
@@ -37,63 +43,118 @@ async function getResumen() {
 export default async function HomePage() {
   const [session, resumen] = await Promise.all([getSessionFromCookies(), getResumen()]);
 
-  const kpis = [
-    { label: 'Jornadas abiertas', value: resumen.jornadasAbiertas, icon: Clock, tone: 'bg-accent-light text-warning' },
+  const hayFaltante = resumen.diferenciaCajaMes > 0.004;
+  const haySobrante = resumen.diferenciaCajaMes < -0.004;
+
+  const lecturas = [
+    {
+      label: 'Jornadas abiertas',
+      value: String(resumen.jornadasAbiertas),
+      icon: Clock,
+      alerta: false,
+    },
     {
       label: 'Tanques bajo mínimo',
-      value: `${resumen.tanquesBajoMinimo} / ${resumen.totalTanques}`,
+      value: String(resumen.tanquesBajoMinimo),
+      detalle: `de ${resumen.totalTanques}`,
       icon: Fuel,
-      tone: resumen.tanquesBajoMinimo > 0 ? 'bg-danger-light text-danger' : 'bg-primary-light text-primary',
+      alerta: resumen.tanquesBajoMinimo > 0,
     },
-    { label: 'Galones vendidos (mes)', value: formatoGalones(resumen.galonesMes), icon: Droplets, tone: 'bg-primary-light text-primary' },
     {
-      label: resumen.diferenciaCajaMes < -0.004 ? 'Sobrante de caja (mes)' : 'Faltante de caja (mes)',
+      label: 'Galones vendidos este mes',
+      value: formatoGalones(resumen.galonesMes),
+      icon: Droplets,
+      alerta: false,
+    },
+    {
+      label: haySobrante ? 'Sobrante de caja este mes' : 'Faltante de caja este mes',
       value: formatoSoles(Math.abs(resumen.diferenciaCajaMes)),
       icon: Scale,
-      tone: resumen.diferenciaCajaMes > 0.004 ? 'bg-danger-light text-danger' : 'bg-primary-light text-primary',
+      alerta: hayFaltante,
     },
   ];
 
   return (
     <>
-      <PageHeader
-        title="Dashboard"
-        description={session ? `Bienvenido, ${session.email}` : 'Resumen general del negocio'}
-      />
+      <PageHeader title="Inicio" description={session ? `Hola, ${session.email}` : undefined} />
 
-      <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4" aria-label="Indicadores">
-        {kpis.map(({ label, value, icon: Icon, tone }) => (
-          <article key={label} className="card flex flex-col gap-3 sm:flex-row sm:items-center">
-            <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl sm:h-12 sm:w-12 ${tone}`}>
-              <Icon className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden />
-            </span>
-            <div className="min-w-0">
-              <p className="text-xs text-muted sm:text-sm">{label}</p>
-              <p className="mt-0.5 truncate text-xl font-bold text-fg sm:text-2xl">{value}</p>
-            </div>
+      {/* Lecturas del mes: cards sin borde, el fondo tintado las separa de la página */}
+      <section aria-label="Resumen del mes" className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+        {lecturas.map(({ label, value, detalle, icon: Icon, alerta }) => (
+          <article
+            key={label}
+            className={`flex min-h-32 flex-col justify-between gap-4 p-4 sm:min-h-36 sm:p-5 ${
+              alerta ? 'bg-danger-light' : 'bg-surface-alt'
+            }`}
+          >
+            <p className={`flex items-start gap-2 text-sm leading-snug ${alerta ? 'text-danger' : 'text-muted'}`}>
+              <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${alerta ? 'text-danger' : 'text-primary'}`} aria-hidden />
+              {label}
+            </p>
+            <p className="flex items-baseline gap-1.5">
+              <span
+                className={`truncate text-2xl font-semibold tabular-nums tracking-tight sm:text-3xl ${
+                  alerta ? 'text-danger' : 'text-fg'
+                }`}
+              >
+                {value}
+              </span>
+              {detalle && <span className={`text-sm ${alerta ? 'text-danger/80' : 'text-muted'}`}>{detalle}</span>}
+            </p>
           </article>
         ))}
       </section>
 
-      <h2 className="mb-3 mt-8 text-sm font-semibold uppercase tracking-[0.14em] text-muted">Módulos</h2>
-      <section className="grid gap-3 sm:grid-cols-2 sm:gap-4">
-        {NAV_ITEMS.filter((item) => item.href !== '/home').map(({ href, label, description, icon: Icon }) => (
-          <Link
-            key={href}
-            href={href}
-            className="card group flex items-center gap-4 transition hover:border-primary hover:shadow-md"
-          >
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary text-on-primary transition group-hover:bg-primary-hover">
-              <Icon className="h-6 w-6" aria-hidden />
-            </span>
-            <div className="min-w-0 flex-1">
-              <h3 className="font-semibold text-fg">{label}</h3>
-              <p className="mt-0.5 text-sm text-muted">{description}</p>
-            </div>
-            <ChevronRight className="h-5 w-5 shrink-0 text-muted transition group-hover:translate-x-0.5 group-hover:text-primary" aria-hidden />
-          </Link>
-        ))}
-      </section>
+      <h2 className="mb-3 mt-10 text-lg font-semibold tracking-tight text-fg">Tanques</h2>
+      {resumen.estaciones.length === 0 ? (
+        <p className="rounded-2xl bg-surface-alt px-4 py-8 text-center text-sm text-muted">
+          Aún no hay tanques. Créalos en{' '}
+          <Link href="/estaciones" className="font-medium text-primary hover:underline">Estaciones y máquinas</Link>.
+        </p>
+      ) : (
+        <div className="grid gap-3 sm:gap-4 xl:grid-cols-2">
+          {resumen.estaciones.map((estacion) => {
+            const atencion = estacion.tanques.filter(necesitaAtencion).length;
+            return (
+              <Link
+                key={estacion.id}
+                href={`/inventario?estacion=${estacion.id}`}
+                className="group block rounded-2xl bg-surface-alt p-4 transition-colors hover:bg-primary-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:p-5"
+              >
+                <span className="flex items-start justify-between gap-3">
+                  <span className="min-w-0">
+                    <span className="block font-semibold text-fg">{estacion.nombre}</span>
+                    {atencion > 0 && (
+                      <span className="block text-sm text-danger">
+                        {atencion === 1 ? '1 tanque necesita atención' : `${atencion} tanques necesitan atención`}
+                      </span>
+                    )}
+                  </span>
+                  <span className="flex shrink-0 items-center gap-1 text-sm text-muted group-hover:text-primary">
+                    <span className="hidden sm:inline">Ver en inventario</span>
+                    <ChevronRight className="h-5 w-5 sm:h-4 sm:w-4" aria-hidden />
+                  </span>
+                </span>
+                <span className="mt-4 grid grid-cols-4 gap-2 sm:gap-4">
+                  {estacion.tanques.map((tanque) => (
+                    <span key={tanque.id} className="flex flex-col items-center text-center">
+                      <span className="relative block aspect-square w-full max-w-20">
+                        <Torta porcentaje={tanque.porcentaje} nivel={tanque.nivel} grosor={12} />
+                        <span
+                          className={`absolute inset-0 flex items-center justify-center text-sm font-semibold tabular-nums ${COLOR_TEXTO_NIVEL[tanque.nivel]}`}
+                        >
+                          {Math.round(tanque.porcentaje)} %
+                        </span>
+                      </span>
+                      <span className="mt-1.5 text-sm text-fg">{tanque.producto}</span>
+                    </span>
+                  ))}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+      )}
     </>
   );
 }

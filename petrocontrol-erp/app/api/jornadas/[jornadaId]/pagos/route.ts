@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { pagoSchema } from '@/lib/validation/pagos';
 import { recalcularCaja } from '@/lib/jornadas-servicio';
 import { NextResponse } from 'next/server';
+import { responderError } from '@/lib/respuesta-formulario';
 
 export async function GET(
   _request: Request,
@@ -32,7 +33,7 @@ export async function POST(
     const jornadaIdNumber = Number(jornadaId);
 
     if (!Number.isInteger(jornadaIdNumber) || jornadaIdNumber <= 0) {
-      return NextResponse.json({ error: 'Jornada inválida.' }, { status: 400 });
+      return responderError(request, 'Jornada inválida.', 400);
     }
 
     const contentType = request.headers.get('content-type') ?? '';
@@ -43,15 +44,12 @@ export async function POST(
     const parsed = pagoSchema.safeParse(rawData);
 
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: parsed.error.issues[0]?.message ?? 'Datos inválidos.' },
-        { status: 400 }
-      );
+      return responderError(request, parsed.error.issues[0]?.message ?? 'Datos inválidos.', 400);
     }
 
     const existe = await db.jornada.findUnique({ where: { id: jornadaIdNumber }, select: { id: true } });
     if (!existe) {
-      return NextResponse.json({ error: 'La jornada no existe.' }, { status: 404 });
+      return responderError(request, 'La jornada no existe.', 404);
     }
 
     const data = parsed.data;
@@ -74,6 +72,6 @@ export async function POST(
     return NextResponse.json({ ok: true, pago }, { status: 201 });
   } catch (error) {
     console.error('PAGO_JORNADA_CREATE_ERROR', error);
-    return NextResponse.json({ error: 'No se pudo registrar el pago.' }, { status: 500 });
+    return responderError(request, 'No se pudo registrar el pago.', 500);
   }
 }

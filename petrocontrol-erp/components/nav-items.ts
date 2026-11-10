@@ -16,7 +16,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     title: 'General',
     items: [
-      { href: '/home', label: 'Dashboard', description: 'Resumen general del negocio', icon: LayoutDashboard },
+      { href: '/home', label: 'Inicio', description: 'Resumen general del negocio', icon: LayoutDashboard },
     ],
   },
   {

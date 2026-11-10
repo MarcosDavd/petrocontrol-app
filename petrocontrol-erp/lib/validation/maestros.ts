@@ -28,11 +28,19 @@ export const maquinaSchema = z.object({
   activa: casilla,
 });
 
+/** Edición de una máquina existente desde su detalle (la estación no se cambia). */
+export const maquinaEdicionSchema = maquinaSchema.pick({ nombre: true });
+
 export const combustibleSchema = z.object({
   nombre: z.string().trim().min(2, 'El nombre del combustible es obligatorio.'),
 });
 
 export const precioSchema = z.object({
+  // Una estación concreta o "todas" (mismo precio en todas las estaciones)
+  estacionId: z.preprocess(
+    (valor) => (valor === 'todas' ? valor : valor === '' || valor == null ? undefined : Number(valor)),
+    z.union([z.literal('todas'), z.number().int().positive()], { error: 'Selecciona una estación.' })
+  ),
   combustibleId: z.coerce.number().int().positive('El combustible es obligatorio.'),
   precio: z.coerce.number().min(0, 'El precio no puede ser menor a 0.'),
   // Opcional: permite registrar precios con fecha pasada (p. ej. al cargar jornadas antiguas)

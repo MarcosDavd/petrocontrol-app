@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { LogOut, Menu, X } from 'lucide-react';
 import { NAV_GROUPS, NAV_ITEMS } from './nav-items';
+import { AvisoError } from './aviso-error';
 
 function BrandMark({ compact = false }: { compact?: boolean }) {
   return (
@@ -13,7 +14,7 @@ function BrandMark({ compact = false }: { compact?: boolean }) {
       <img src="/brand/isotipo-blanco.svg" alt="" className={compact ? 'h-8 w-auto' : 'h-10 w-auto'} />
       <span className="leading-tight">
         <span className="block text-base font-bold tracking-tight text-sidebar-text">GL-App</span>
-        {!compact && <span className="block text-[11px] uppercase tracking-[0.18em] text-sidebar-muted">Grifos Lim</span>}
+        {!compact && <span className="block text-xs text-sidebar-muted">Grifos Lim</span>}
       </span>
     </Link>
   );
@@ -24,7 +25,7 @@ function NavLinks({ pathname, onNavigate }: { pathname: string; onNavigate?: () 
     <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-4" aria-label="Principal">
       {NAV_GROUPS.map((group) => (
         <div key={group.title}>
-          <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-sidebar-muted">
+          <p className="px-3 pb-1.5 text-xs font-medium text-sidebar-muted">
             {group.title}
           </p>
           <ul className="space-y-1">
@@ -64,15 +65,15 @@ function UserFooter({ email, onNavigate }: { email: string; onNavigate?: () => v
       <Link
         href="/cuenta"
         onClick={onNavigate}
-        title="Mi cuenta · cambiar contraseña"
+        title="Mi cuenta y contraseña"
         className="flex items-center gap-3 rounded-lg px-3 py-2 transition hover:bg-sidebar-hover"
       >
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gl-amarillo text-sm font-bold uppercase text-gl-grafito">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center bg-gl-amarillo text-sm font-bold uppercase text-gl-grafito">
           {email.charAt(0)}
         </span>
         <span className="min-w-0 flex-1 leading-tight">
           <span className="block truncate text-sm text-sidebar-text">{email}</span>
-          <span className="block text-[11px] text-sidebar-muted">Mi cuenta · contraseña</span>
+          <span className="block text-xs text-sidebar-muted">Mi cuenta</span>
         </span>
       </Link>
       <form action="/api/auth/logout" method="POST">
@@ -88,13 +89,13 @@ function UserFooter({ email, onNavigate }: { email: string; onNavigate?: () => v
   );
 }
 
-/** Franja de colores de marca (verde · amarillo · rojo). */
-function BrandStripe() {
+/** Borde tricolor del "techo del grifo": mismas proporciones que en el login (5/3/2). */
+function BrandStripe({ className = 'h-1' }: { className?: string }) {
   return (
-    <div className="flex h-1 w-full" aria-hidden>
-      <span className="flex-1 bg-gl-verde" />
-      <span className="flex-1 bg-gl-amarillo" />
-      <span className="flex-1 bg-gl-rojo" />
+    <div className={`flex w-full ${className}`} aria-hidden>
+      <span className="flex-[5] bg-gl-verde" />
+      <span className="flex-[3] bg-gl-amarillo" />
+      <span className="flex-[2] bg-gl-rojo" />
     </div>
   );
 }
@@ -120,7 +121,7 @@ export function AppShell({ email, children }: { email: string; children: React.R
     <div className="min-h-dvh lg:pl-64">
       {/* Sidebar fija (escritorio) */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-sidebar lg:flex">
-        <BrandStripe />
+        <BrandStripe className="h-1.5" />
         <div className="px-6 py-5">
           <BrandMark />
         </div>
@@ -129,8 +130,7 @@ export function AppShell({ email, children }: { email: string; children: React.R
       </aside>
 
       {/* Barra superior (móvil / tablet) */}
-      <header className="sticky top-0 z-30 bg-sidebar pt-[env(safe-area-inset-top)] shadow-md lg:hidden">
-        <BrandStripe />
+      <header className="sticky top-0 z-30 bg-sidebar pt-[env(safe-area-inset-top)] lg:hidden">
         <div className="flex h-14 items-center justify-between gap-3 px-4">
           <BrandMark compact />
           {current && (
@@ -147,6 +147,7 @@ export function AppShell({ email, children }: { email: string; children: React.R
             <Menu className="h-6 w-6" aria-hidden />
           </button>
         </div>
+        <BrandStripe className="h-1.5" />
       </header>
 
       {/* Menú lateral deslizable (móvil / tablet) */}
@@ -180,6 +181,9 @@ export function AppShell({ email, children }: { email: string; children: React.R
       </aside>
 
       <main className="mx-auto w-full max-w-7xl px-4 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-8 lg:px-8">
+        <Suspense fallback={null}>
+          <AvisoError />
+        </Suspense>
         {children}
       </main>
     </div>

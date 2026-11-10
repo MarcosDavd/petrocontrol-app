@@ -61,6 +61,7 @@ async function getDatos() {
       estacionId,
       horarioInicio,
       horarioFin,
+      enJornada: abiertas.find((jornada) => jornada.empleadoId === id)?.maquina.nombre ?? null,
     })),
     abiertas,
     cerradas,
@@ -98,7 +99,7 @@ export default async function JornadasPage() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-semibold">{jornada.empleado.nombre}</p>
                       <p className="text-xs text-muted">
-                        {jornada.maquina.nombre} · {jornada.estacion.nombre} · desde {formatoFechaHora(jornada.inicio)}
+                        {jornada.maquina.nombre} en {jornada.estacion.nombre}, desde {formatoFechaHora(jornada.inicio)}
                       </p>
                     </div>
                     <span className="badge-warning">Cerrar</span>
@@ -120,7 +121,7 @@ export default async function JornadasPage() {
             {/* Tabla (tablet / escritorio) */}
             <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-left text-sm">
-                <thead className="border-b border-border text-xs uppercase tracking-wide text-muted">
+                <thead className="border-b border-border text-xs font-medium text-muted">
                   <tr>
                     <th className="px-3 py-2 font-medium">Inicio</th>
                     <th className="px-3 py-2 font-medium">Empleado</th>
@@ -142,10 +143,10 @@ export default async function JornadasPage() {
                           </Link>
                         </td>
                         <td className="px-3 py-2.5">{jornada.empleado.nombre}</td>
-                        <td className="px-3 py-2.5 text-muted">{jornada.maquina.nombre} · {jornada.estacion.nombre}</td>
-                        <td className="whitespace-nowrap px-3 py-2.5 text-right font-mono">{formatoGalones(jornada.galonesProductos)}</td>
-                        <td className="whitespace-nowrap px-3 py-2.5 text-right font-mono">{formatoSoles(jornada.importeEsperado)}</td>
-                        <td className={`whitespace-nowrap px-3 py-2.5 text-right font-mono font-semibold ${caja > 0.004 ? 'text-danger' : caja < -0.004 ? 'text-warning' : 'text-success'}`}>
+                        <td className="px-3 py-2.5 text-muted">{jornada.maquina.nombre} en {jornada.estacion.nombre}</td>
+                        <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">{formatoGalones(jornada.galonesProductos)}</td>
+                        <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">{formatoSoles(jornada.importeEsperado)}</td>
+                        <td className={`whitespace-nowrap px-3 py-2.5 text-right tabular-nums font-semibold ${caja > 0.004 ? 'text-danger' : caja < -0.004 ? 'text-warning' : 'text-success'}`}>
                           {caja > 0.004 ? '−' : caja < -0.004 ? '+' : ''}{formatoSoles(Math.abs(caja))}
                         </td>
                         <td className="px-3 py-2.5"><AlertasJornada jornada={jornada} compacto /></td>
@@ -164,9 +165,9 @@ export default async function JornadasPage() {
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="truncate font-semibold">{jornada.empleado.nombre}</p>
-                        <p className="text-xs text-muted">{jornada.maquina.nombre} · {formatoFechaHora(jornada.inicio)}</p>
+                        <p className="text-xs text-muted">{jornada.maquina.nombre}, {formatoFechaHora(jornada.inicio)}</p>
                       </div>
-                      <span className="font-mono text-sm font-semibold">{formatoSoles(jornada.importeEsperado)}</span>
+                      <span className="tabular-nums text-sm font-semibold">{formatoSoles(jornada.importeEsperado)}</span>
                     </div>
                     <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
                       <span>{formatoGalones(jornada.galonesProductos)}</span>

@@ -2,6 +2,7 @@ import { Prisma } from '@/generated/prisma';
 import { db } from '@/lib/db';
 import { tanqueSchema } from '@/lib/validation/inventario';
 import { NextResponse } from 'next/server';
+import { responderError } from '@/lib/respuesta-formulario';
 
 export async function GET() {
   const tanques = await db.tanque.findMany({
@@ -29,10 +30,7 @@ export async function POST(request: Request) {
     const parsed = tanqueSchema.safeParse(rawData);
 
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: parsed.error.issues[0]?.message ?? 'Datos inválidos.' },
-        { status: 400 }
-      );
+      return responderError(request, parsed.error.issues[0]?.message ?? 'Datos inválidos.', 400);
     }
 
     const exists = await db.tanque.findUnique({
@@ -45,10 +43,7 @@ export async function POST(request: Request) {
     });
 
     if (exists) {
-      return NextResponse.json(
-        { error: 'Ya existe un tanque para esta estación y combustible.' },
-        { status: 409 }
-      );
+      return responderError(request, 'Ya existe un tanque para esta estación y combustible.', 409);
     }
 
     const tanque = await db.tanque.create({
@@ -61,12 +56,12 @@ export async function POST(request: Request) {
     });
 
     if (!contentType.includes('application/json')) {
-      return NextResponse.redirect(new URL('/inventario', request.url), 303);
+      return NextResponse.redirect(new URL('/estaciones', request.url), 303);
     }
 
     return NextResponse.json({ ok: true, tanque }, { status: 201 });
   } catch (error) {
     console.error('TANQUE_CREATE_ERROR', error);
-    return NextResponse.json({ error: 'No se pudo crear el tanque.' }, { status: 500 });
+    return responderError(request, 'No se pudo crear el tanque.', 500);
   }
 }

@@ -24,7 +24,7 @@ function TablaAcumulado({ filas, titulo }: { filas: { nombre: string; datos: Acu
   return (
     <div className="-mx-4 overflow-x-auto sm:mx-0">
       <table className="w-full min-w-[460px] text-sm">
-        <thead className="border-b border-border text-xs uppercase tracking-wide text-muted">
+        <thead className="border-b border-border text-xs font-medium text-muted">
           <tr>
             <th className="px-4 py-2 text-left font-medium sm:px-3">{titulo}</th>
             <th className="px-4 py-2 text-right font-medium sm:px-3">Jornadas</th>
@@ -33,7 +33,7 @@ function TablaAcumulado({ filas, titulo }: { filas: { nombre: string; datos: Acu
             <th className="px-4 py-2 text-right font-medium sm:px-3">Faltante / sobrante</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-border font-mono">
+        <tbody className="divide-y divide-border tabular-nums">
           {filas.map(({ nombre, datos }) => (
             <tr key={nombre}>
               <td className="px-4 py-2.5 font-sans font-semibold sm:px-3">{nombre}</td>
@@ -57,7 +57,7 @@ export default async function ReportesPage({
   const params = await searchParams;
   const { desde, hasta, inicio, fin } = rangoFechas(params.desde, params.hasta);
 
-  const [jornadas, combustibles, recargas, tanques] = await Promise.all([
+  const [jornadas, combustibles, recargas, tanques, stock] = await Promise.all([
     db.jornada.findMany({
       where: { estado: 'CERRADA', inicio: { gte: inicio, lte: fin } },
       include: { empleado: true, estacion: true, maquina: true, lecturas: { include: { combustible: true } } },
@@ -70,6 +70,8 @@ export default async function ReportesPage({
       _sum: { galones: true },
     }),
     db.tanque.findMany({ select: { id: true, combustibleId: true } }),
+    // Stock actual: suma de todos los movimientos de cada tanque (no depende del período)
+    db.movimientoStock.groupBy({ by: ['tanqueId'], _sum: { galones: true } }),
   ]);
 
   const resumen = calcularResumenReportes({
@@ -101,6 +103,13 @@ export default async function ReportesPage({
   }
   const galonesTotales = [...porProducto.values()].reduce((total, p) => total + p.galones, 0n);
 
+  const stockPorProducto = new Map<number, number>();
+  for (const fila of stock) {
+    const tanque = tanques.find((t) => t.id === fila.tanqueId);
+    if (!tanque) continue;
+    stockPorProducto.set(tanque.combustibleId, (stockPorProducto.get(tanque.combustibleId) ?? 0) + Number(fila._sum.galones ?? 0));
+  }
+
   const nombres = {
     empleado: new Map(jornadas.map((j) => [j.empleadoId, j.empleado.nombre])),
     estacion: new Map(jornadas.map((j) => [j.estacionId, j.estacion.nombre])),
@@ -115,16 +124,16 @@ export default async function ReportesPage({
 
   const conAlertas = jornadas.filter(tieneAlertas);
 
+  // Mismo lenguaje que el inicio: card tintada; en rojo solo lo que pide atención (faltante)
   const kpis = [
-    { label: 'Galones vendidos', valor: formatoGalones(Number(galonesTotales) / 100), icon: Droplets, tono: 'bg-primary-light text-primary', texto: 'text-fg' },
-    { label: 'Venta esperada', valor: soles(resumen.total.esperado), icon: Fuel, tono: 'bg-primary-light text-primary', texto: 'text-fg' },
-    { label: 'Declarado', valor: soles(resumen.total.declarado), icon: Wallet, tono: 'bg-surface-alt text-fg', texto: 'text-fg' },
+    { label: 'Galones vendidos', valor: formatoGalones(Number(galonesTotales) / 100), icon: Droplets, alerta: false },
+    { label: 'Venta esperada', valor: soles(resumen.total.esperado), icon: Fuel, alerta: false },
+    { label: 'Declarado', valor: soles(resumen.total.declarado), icon: Wallet, alerta: false },
     {
       label: resumen.total.diferencia > 0n ? 'Faltante neto' : resumen.total.diferencia < 0n ? 'Sobrante neto' : 'Caja cuadrada',
       valor: soles(resumen.total.diferencia < 0n ? -resumen.total.diferencia : resumen.total.diferencia),
       icon: Scale,
-      tono: resumen.total.diferencia > 0n ? 'bg-danger-light text-danger' : 'bg-accent-light text-warning',
-      texto: resumen.total.diferencia > 0n ? 'text-danger' : resumen.total.diferencia < 0n ? 'text-warning' : 'text-success',
+      alerta: resumen.total.diferencia > 0n,
     },
   ];
 
@@ -154,15 +163,24 @@ export default async function ReportesPage({
       />
 
       <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4" aria-label="Totales">
-        {kpis.map(({ label, valor, icon: Icon, tono, texto }) => (
-          <article key={label} className="card">
-            <div className="flex items-center gap-2">
-              <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${tono}`}>
-                <Icon className="h-4 w-4" aria-hidden />
-              </span>
-              <p className="text-sm text-muted">{label}</p>
-            </div>
-            <p className={`mt-3 break-all font-mono text-lg font-bold sm:text-2xl ${texto}`}>{valor}</p>
+        {kpis.map(({ label, valor, icon: Icon, alerta }) => (
+          <article
+            key={label}
+            className={`flex min-h-32 flex-col justify-between gap-4 rounded-2xl p-4 sm:min-h-36 sm:p-5 ${
+              alerta ? 'bg-danger-light' : 'bg-surface-alt'
+            }`}
+          >
+            <p className={`flex items-start gap-2 text-sm leading-snug ${alerta ? 'text-danger' : 'text-muted'}`}>
+              <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${alerta ? 'text-danger' : 'text-primary'}`} aria-hidden />
+              {label}
+            </p>
+            <p
+              className={`break-all text-2xl font-semibold tabular-nums tracking-tight sm:text-3xl ${
+                alerta ? 'text-danger' : 'text-fg'
+              }`}
+            >
+              {valor}
+            </p>
           </article>
         ))}
       </section>
@@ -177,7 +195,7 @@ export default async function ReportesPage({
               <li key={jornada.id} className="flex flex-col gap-2 py-2.5 sm:flex-row sm:items-center sm:justify-between">
                 <Link href={`/jornadas/${jornada.id}`} className="min-w-0 text-sm hover:text-primary">
                   <span className="font-semibold">{jornada.empleado.nombre}</span>
-                  <span className="text-muted"> · {jornada.maquina.nombre} · {jornada.estacion.nombre} · {formatoFechaHora(jornada.inicio)}</span>
+                  <span className="text-muted">, {jornada.maquina.nombre} en {jornada.estacion.nombre}, {formatoFechaHora(jornada.inicio)}</span>
                 </Link>
                 <AlertasJornada jornada={jornada} compacto />
               </li>
@@ -188,17 +206,19 @@ export default async function ReportesPage({
 
       <section className="card">
         <h2 className="card-title"><Fuel className="h-5 w-5 text-primary" aria-hidden />Por producto</h2>
+        <p className="-mt-2 mb-3 text-sm text-muted">Ventas y recargas del período elegido. El stock actual es el de hoy, sumando todas las estaciones.</p>
         <div className="-mx-4 overflow-x-auto sm:mx-0">
-          <table className="w-full min-w-[420px] text-sm">
-            <thead className="border-b border-border text-xs uppercase tracking-wide text-muted">
+          <table className="w-full min-w-[540px] text-sm">
+            <thead className="border-b border-border text-xs font-medium text-muted">
               <tr>
                 <th className="px-4 py-2 text-left font-medium sm:px-3">Producto</th>
                 <th className="px-4 py-2 text-right font-medium sm:px-3">Galones vendidos</th>
                 <th className="px-4 py-2 text-right font-medium sm:px-3">Importe</th>
                 <th className="px-4 py-2 text-right font-medium sm:px-3">Galones recargados</th>
+                <th className="px-4 py-2 text-right font-medium sm:px-3">Stock actual</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border font-mono">
+            <tbody className="divide-y divide-border tabular-nums">
               {combustibles.map((combustible) => {
                 const datos = porProducto.get(combustible.id) ?? { galones: 0n, importe: 0n, recargado: 0 };
                 return (
@@ -207,6 +227,9 @@ export default async function ReportesPage({
                     <td className="px-4 py-2.5 text-right sm:px-3">{formatoGalones(Number(datos.galones) / 100)}</td>
                     <td className="px-4 py-2.5 text-right sm:px-3">{soles(datos.importe)}</td>
                     <td className="px-4 py-2.5 text-right text-success sm:px-3">{formatoGalones(datos.recargado)}</td>
+                    <td className={`px-4 py-2.5 text-right font-semibold sm:px-3 ${(stockPorProducto.get(combustible.id) ?? 0) < 0 ? 'text-danger' : ''}`}>
+                      {formatoGalones(stockPorProducto.get(combustible.id) ?? 0)}
+                    </td>
                   </tr>
                 );
               })}
@@ -215,7 +238,7 @@ export default async function ReportesPage({
         </div>
       </section>
 
-      <section className="grid items-start gap-6 xl:grid-cols-2">
+      <section className="grid items-start gap-6 2xl:grid-cols-2 [&>*]:min-w-0">
         <div className="card">
           <h2 className="card-title"><UserRound className="h-5 w-5 text-primary" aria-hidden />Caja por empleado</h2>
           <TablaAcumulado filas={filasEmpleado} titulo="Empleado" />

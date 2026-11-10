@@ -12,6 +12,20 @@ export const ETIQUETA_NIVEL: Record<NivelTanque, string> = {
   normal: 'Normal',
 };
 
+/** Tanque con su stock teórico y estado, listo para mostrar. */
+export type TanqueResumen = {
+  id: number;
+  producto: string;
+  estacion: string;
+  estacionId: number;
+  stock: number;
+  capacidad: number;
+  minimo: number;
+  porcentaje: number;
+  libre: number;
+  nivel: NivelTanque;
+};
+
 /** Estado de un tanque a partir de su stock teórico. */
 export function estadoTanque(stock: number, capacidad: number, minimo: number) {
   const porcentaje = capacidad > 0 ? Math.max(0, Math.min((stock / capacidad) * 100, 100)) : 0;

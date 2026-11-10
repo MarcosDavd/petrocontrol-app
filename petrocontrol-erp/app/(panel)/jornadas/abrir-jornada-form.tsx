@@ -25,6 +25,8 @@ export type EmpleadoOpcion = {
   estacionId: number;
   horarioInicio: string | null;
   horarioFin: string | null;
+  /** Máquina donde tiene una jornada abierta (no se le puede abrir otra), o null. */
+  enJornada: string | null;
 };
 
 function AvisoDiferencia({ previo, actual }: { previo: string | null; actual: string }) {
@@ -59,7 +61,7 @@ function FilaProducto({ producto }: { producto: MaquinaOpcion['productos'][numbe
             value={atras}
             onChange={(e) => setAtras(e.target.value)}
             placeholder="0.00"
-            className="field font-mono"
+            className="field tabular-nums"
             required
           />
           <AvisoDiferencia previo={producto.previoAtras} actual={atras} />
@@ -73,7 +75,7 @@ function FilaProducto({ producto }: { producto: MaquinaOpcion['productos'][numbe
             value={adelante}
             onChange={(e) => setAdelante(e.target.value)}
             placeholder="0.00"
-            className="field font-mono"
+            className="field tabular-nums"
             required
           />
           <AvisoDiferencia previo={producto.previoAdelante} actual={adelante} />
@@ -149,9 +151,13 @@ export function AbrirJornadaForm({ maquinas, empleados }: { maquinas: MaquinaOpc
           >
             <option value="">{maquina ? 'Selecciona empleado' : 'Primero elige la máquina'}</option>
             {empleadosEstacion.map((empleado) => (
-              <option key={empleado.id} value={empleado.id}>
+              <option key={empleado.id} value={empleado.id} disabled={empleado.enJornada !== null}>
                 {empleado.nombre}
-                {empleado.horarioInicio ? ` (${empleado.horarioInicio} – ${empleado.horarioFin ?? '—'})` : ''}
+                {empleado.enJornada
+                  ? ` (en jornada en ${empleado.enJornada})`
+                  : empleado.horarioInicio
+                    ? ` (${empleado.horarioInicio} – ${empleado.horarioFin ?? '—'})`
+                    : ''}
               </option>
             ))}
           </select>
@@ -200,7 +206,7 @@ export function AbrirJornadaForm({ maquinas, empleados }: { maquinas: MaquinaOpc
             value={totalizador}
             onChange={(e) => setTotalizador(e.target.value)}
             placeholder="0.00"
-            className="field font-mono"
+            className="field tabular-nums"
           />
         </div>
       </div>

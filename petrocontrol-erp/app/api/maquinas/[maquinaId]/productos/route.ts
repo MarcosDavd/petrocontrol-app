@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { responderError } from '@/lib/respuesta-formulario';
 import { db } from '@/lib/db';
 
 /** Reemplaza los productos (combustibles) que despacha una máquina. */
@@ -6,7 +7,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ maq
   const { maquinaId } = await params;
   const id = Number(maquinaId);
   if (!Number.isInteger(id) || id <= 0) {
-    return NextResponse.json({ error: 'Máquina inválida.' }, { status: 400 });
+    return responderError(request, 'Máquina inválida.', 400);
   }
 
   try {
@@ -22,10 +23,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ maq
 
     const abierta = await db.jornada.findFirst({ where: { maquinaId: id, estado: 'ABIERTA' } });
     if (abierta) {
-      return NextResponse.json(
-        { error: 'No se pueden cambiar los productos mientras la máquina tiene una jornada abierta.' },
-        { status: 409 }
-      );
+      return responderError(request, 'No se pueden cambiar los productos mientras la máquina tiene una jornada abierta.', 409);
     }
 
     await db.$transaction([
@@ -34,11 +32,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ maq
     ]);
 
     if (!contentType.includes('application/json')) {
-      return NextResponse.redirect(new URL('/estaciones', request.url), 303);
+      return NextResponse.redirect(new URL(`/estaciones/maquinas/${id}`, request.url), 303);
     }
     return NextResponse.json({ ok: true, combustibleIds: ids });
   } catch (error) {
     console.error('MAQUINA_PRODUCTOS_ERROR', error);
-    return NextResponse.json({ error: 'No se pudieron guardar los productos.' }, { status: 500 });
+    return responderError(request, 'No se pudieron guardar los productos.', 500);
   }
 }

@@ -67,7 +67,7 @@ export default async function EmpleadosPage() {
         <div className="card">
           <h2 className="card-title">
             <UsersRound className="h-5 w-5 text-primary" aria-hidden />
-            Personal ({empleados.filter((e) => e.activo).length} activos)
+            Personal: {empleados.filter((e) => e.activo).length} {empleados.filter((e) => e.activo).length === 1 ? 'activo' : 'activos'}
           </h2>
           {sinHorario > 0 && (
             <p className="mb-3 rounded-lg bg-accent-light px-3 py-2 text-xs text-fg">
@@ -83,7 +83,7 @@ export default async function EmpleadosPage() {
                 .filter((estacion) => empleados.some((e) => e.estacionId === estacion.id))
                 .map((estacion) => (
                   <div key={estacion.id}>
-                    <h3 className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted">{estacion.nombre}</h3>
+                    <h3 className="mb-2 text-sm font-semibold text-fg">{estacion.nombre}</h3>
                     <ul className="space-y-2">
                       {empleados
                         .filter((e) => e.estacionId === estacion.id)
