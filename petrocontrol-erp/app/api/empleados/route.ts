@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { responderError } from '@/lib/respuesta-formulario';
 import { db } from '@/lib/db';
 import { empleadoSchema } from '@/lib/validation/maestros';
 
@@ -21,10 +22,7 @@ export async function POST(request: Request) {
     const parsed = empleadoSchema.safeParse(rawData);
 
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: parsed.error.issues[0]?.message ?? 'Datos inválidos.' },
-        { status: 400 }
-      );
+      return responderError(request, parsed.error.issues[0]?.message ?? 'Datos inválidos.', 400);
     }
 
     const data = parsed.data;
@@ -45,6 +43,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, empleado }, { status: 201 });
   } catch (error) {
     console.error('EMPLEADO_CREATE_ERROR', error);
-    return NextResponse.json({ error: 'No se pudo crear el empleado.' }, { status: 500 });
+    return responderError(request, 'No se pudo crear el empleado.', 500);
   }
 }

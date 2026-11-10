@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { responderError } from '@/lib/respuesta-formulario';
 import { fechaHoraLima } from '@/lib/zona-horaria';
 import { Prisma } from '@/generated/prisma';
 import { db } from '@/lib/db';
@@ -23,10 +24,7 @@ export async function POST(request: Request) {
     const parsed = precioSchema.safeParse(rawData);
 
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: parsed.error.issues[0]?.message ?? 'Datos inválidos.' },
-        { status: 400 }
-      );
+      return responderError(request, parsed.error.issues[0]?.message ?? 'Datos inválidos.', 400);
     }
 
     const precio = await db.historialPrecio.create({
@@ -50,6 +48,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, precio }, { status: 201 });
   } catch (error) {
     console.error('PRECIO_CREATE_ERROR', error);
-    return NextResponse.json({ error: 'No se pudo registrar el precio.' }, { status: 500 });
+    return responderError(request, 'No se pudo registrar el precio.', 500);
   }
 }

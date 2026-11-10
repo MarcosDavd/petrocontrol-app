@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { responderError } from '@/lib/respuesta-formulario';
 import { db } from '@/lib/db';
 import { empleadoSchema } from '@/lib/validation/maestros';
 
@@ -7,7 +8,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ emp
   const { empleadoId } = await params;
   const id = Number(empleadoId);
   if (!Number.isInteger(id) || id <= 0) {
-    return NextResponse.json({ error: 'Empleado inválido.' }, { status: 400 });
+    return responderError(request, 'Empleado inválido.', 400);
   }
 
   try {
@@ -18,20 +19,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ emp
 
     const parsed = empleadoSchema.safeParse(rawData);
     if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Datos inválidos.' }, { status: 400 });
+      return responderError(request, parsed.error.issues[0]?.message ?? 'Datos inválidos.', 400);
     }
 
     const actual = await db.empleado.findUnique({ where: { id } });
-    if (!actual) return NextResponse.json({ error: 'El empleado no existe.' }, { status: 404 });
+    if (!actual) return responderError(request, 'El empleado no existe.', 404);
 
     const data = parsed.data;
     if (data.estacionId !== actual.estacionId) {
       const abierta = await db.jornada.findFirst({ where: { empleadoId: id, estado: 'ABIERTA' } });
       if (abierta) {
-        return NextResponse.json(
-          { error: 'No se puede cambiar la estación mientras el empleado tiene una jornada abierta.' },
-          { status: 409 }
-        );
+        return responderError(request, 'No se puede cambiar la estación mientras el empleado tiene una jornada abierta.', 409);
       }
     }
 
@@ -52,6 +50,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ emp
     return NextResponse.json({ ok: true, empleado });
   } catch (error) {
     console.error('EMPLEADO_UPDATE_ERROR', error);
-    return NextResponse.json({ error: 'No se pudo actualizar el empleado.' }, { status: 500 });
+    return responderError(request, 'No se pudo actualizar el empleado.', 500);
   }
 }

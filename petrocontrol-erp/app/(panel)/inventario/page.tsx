@@ -1,77 +1,34 @@
 import Link from 'next/link';
-import { History, PlusCircle, SlidersHorizontal, Truck } from 'lucide-react';
+import { ChevronLeft, ChevronRight, History, SlidersHorizontal, Truck } from 'lucide-react';
 import { db } from '@/lib/db';
 import { EmptyState, PageHeader } from '@/components/page-header';
-import { InventarioTanques, type TanqueResumen } from '@/components/inventario-tanques';
+import { InventarioTanques } from '@/components/inventario-tanques';
 import { formatoFecha, formatoGalones } from '@/lib/formato';
-import { estadoTanque, historialStock, PERIODOS } from '@/lib/inventario';
-import { fechaHoraLima, hoyLima, sumarDias } from '@/lib/zona-horaria';
+import { paginar } from '@/lib/paginacion';
+import { obtenerResumenTanques } from '@/lib/tanques-servicio';
+import { hoyLima } from '@/lib/zona-horaria';
 
 export const metadata = { title: 'Inventario' };
 
-const DIAS_RESUMEN = 30;
+const MOVIMIENTOS_POR_PAGINA = 15;
 
-/** Stock diario de un tanque en los últimos `dias` días (incluido hoy). */
-async function getHistorial(tanqueId: number, dias: number) {
-  const hasta = hoyLima();
-  const desde = sumarDias(hasta, -(dias - 1));
-  const inicio = fechaHoraLima(desde);
-
-  const [previo, movimientos] = await Promise.all([
-    db.movimientoStock.aggregate({ where: { tanqueId, fecha: { lt: inicio } }, _sum: { galones: true } }),
-    db.movimientoStock.findMany({
-      where: { tanqueId, fecha: { gte: inicio } },
-      select: { fecha: true, galones: true },
-    }),
-  ]);
-
-  return historialStock(
-    Number(previo._sum.galones ?? 0),
-    movimientos.map((m) => ({ fecha: m.fecha, galones: Number(m.galones) })),
-    desde,
-    hasta
-  );
-}
-
-async function getInventario() {
-  const desde = fechaHoraLima(sumarDias(hoyLima(), -DIAS_RESUMEN));
-
-  const [estaciones, combustibles, tanques, stock, periodo, movimientos] = await Promise.all([
+async function getInventario(paginaPedida: string | undefined) {
+  const [estaciones, tanques, totalMovimientos] = await Promise.all([
     db.estacion.findMany({ orderBy: { nombre: 'asc' } }),
-    db.combustible.findMany({ orderBy: { id: 'asc' } }),
-    db.tanque.findMany({
-      include: { estacion: true, combustible: true },
-      orderBy: [{ estacionId: 'asc' }, { combustibleId: 'asc' }],
-    }),
-    // Stock teórico = suma de TODOS los movimientos del tanque
-    db.movimientoStock.groupBy({ by: ['tanqueId'], _sum: { galones: true } }),
-    db.movimientoStock.groupBy({
-      by: ['tanqueId', 'tipo'],
-      where: { fecha: { gte: desde } },
-      _sum: { galones: true },
-    }),
-    db.movimientoStock.findMany({
-      include: { tanque: { include: { combustible: true, estacion: true } } },
-      orderBy: [{ fecha: 'desc' }, { id: 'desc' }],
-      take: 25,
-    }),
+    obtenerResumenTanques(),
+    db.movimientoStock.count(),
   ]);
 
-  const stockPorTanque = new Map(stock.map((s) => [s.tanqueId, Number(s._sum.galones ?? 0)]));
+  // Solo se trae la página pedida (máx. 15), no todo el historial
+  const paginacion = paginar(totalMovimientos, paginaPedida, MOVIMIENTOS_POR_PAGINA);
+  const movimientos = await db.movimientoStock.findMany({
+    include: { tanque: { include: { combustible: true, estacion: true } } },
+    orderBy: [{ fecha: 'desc' }, { id: 'desc' }],
+    skip: paginacion.skip,
+    take: paginacion.take,
+  });
 
-  // Recargado vs vendido por producto (todas las estaciones) en el período
-  const resumenProducto = new Map<number, { recargado: number; vendido: number }>();
-  for (const fila of periodo) {
-    const tanque = tanques.find((t) => t.id === fila.tanqueId);
-    if (!tanque) continue;
-    const actual = resumenProducto.get(tanque.combustibleId) ?? { recargado: 0, vendido: 0 };
-    const galones = Number(fila._sum.galones ?? 0);
-    if (fila.tipo === 'RECARGA') actual.recargado += galones;
-    if (fila.tipo === 'VENTA') actual.vendido += -galones;
-    resumenProducto.set(tanque.combustibleId, actual);
-  }
-
-  return { estaciones, combustibles, tanques, stockPorTanque, resumenProducto, movimientos };
+  return { estaciones, tanques, movimientos, totalMovimientos, paginacion };
 }
 
 const TIPO: Record<string, { etiqueta: string; clase: string }> = {
@@ -84,7 +41,7 @@ const TIPO: Record<string, { etiqueta: string; clase: string }> = {
 function opcionesTanque(tanques: Awaited<ReturnType<typeof getInventario>>['tanques']) {
   return tanques.map((tanque) => (
     <option key={tanque.id} value={tanque.id}>
-      {tanque.combustible.nombre} · {tanque.estacion.nombre}
+      {tanque.producto} en {tanque.estacion}
     </option>
   ));
 }
@@ -92,35 +49,26 @@ function opcionesTanque(tanques: Awaited<ReturnType<typeof getInventario>>['tanq
 export default async function InventarioPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tanque?: string; dias?: string }>;
+  searchParams: Promise<{ estacion?: string; pagina?: string }>;
 }) {
   const params = await searchParams;
-  const { estaciones, combustibles, tanques, stockPorTanque, resumenProducto, movimientos } = await getInventario();
+  const { estaciones, tanques, movimientos, totalMovimientos, paginacion } = await getInventario(params.pagina);
   const hoy = hoyLima();
 
-  const resumenTanques: TanqueResumen[] = tanques.map((tanque) => {
-    const stock = stockPorTanque.get(tanque.id) ?? 0;
-    const capacidad = Number(tanque.capacidad);
-    const minimo = Number(tanque.minimo);
-    return {
-      id: tanque.id,
-      producto: tanque.combustible.nombre,
-      estacion: tanque.estacion.nombre,
-      estacionId: tanque.estacionId,
-      stock,
-      capacidad,
-      minimo,
-      ...estadoTanque(stock, capacidad, minimo),
-    };
-  });
+  // Estación de la URL; si no hay (o no existe), la primera que tenga tanques
+  const estacionId =
+    estaciones.find((e) => e.id === Number(params.estacion))?.id ??
+    estaciones.find((e) => tanques.some((t) => t.estacionId === e.id))?.id ??
+    null;
 
-  // Tanque a detallar: el de la URL; si no hay, el primero con alerta; si no, el primero.
-  const seleccionado =
-    resumenTanques.find((t) => t.id === Number(params.tanque)) ??
-    resumenTanques.find((t) => t.nivel === 'revisar' || t.nivel === 'bajo') ??
-    resumenTanques[0];
-  const dias = PERIODOS.find((p) => p === Number(params.dias)) ?? PERIODOS[0];
-  const historial = seleccionado ? await getHistorial(seleccionado.id, dias) : [];
+  /** Enlace a otra página de movimientos conservando la estación elegida. */
+  const hrefPagina = (pagina: number) => {
+    const query = new URLSearchParams();
+    if (estacionId !== null) query.set('estacion', String(estacionId));
+    if (pagina > 1) query.set('pagina', String(pagina));
+    const texto = query.toString();
+    return texto ? `/inventario?${texto}` : '/inventario';
+  };
 
   return (
     <div className="space-y-6">
@@ -129,12 +77,17 @@ export default async function InventarioPage({
         description="Stock de cada tanque: recargas registradas menos lo vendido según los contadores de las jornadas."
       />
 
-      {seleccionado ? (
-        <InventarioTanques tanques={resumenTanques} seleccionadoId={seleccionado.id} historial={historial} dias={dias} />
+      {estaciones.length === 0 ? (
+        <section className="card"><EmptyState>No hay estaciones registradas.</EmptyState></section>
       ) : (
-        <section className="card"><EmptyState>No hay tanques registrados.</EmptyState></section>
+        <InventarioTanques
+          tanques={tanques}
+          estaciones={estaciones.map((e) => ({ id: e.id, nombre: e.nombre }))}
+          estacionId={estacionId}
+        />
       )}
 
+      {/* Operación diaria: lo que entra al tanque y las correcciones */}
       <section className="grid items-start gap-6 xl:grid-cols-2">
         <div className="card">
           <h2 className="card-title"><Truck className="h-5 w-5 text-primary" aria-hidden />Registrar recarga (cisterna)</h2>
@@ -163,43 +116,31 @@ export default async function InventarioPage({
         </div>
 
         <div className="card">
-          <h2 className="card-title"><History className="h-5 w-5 text-primary" aria-hidden />Últimos {DIAS_RESUMEN} días por producto</h2>
-          {combustibles.length === 0 ? (
-            <EmptyState>No hay productos registrados.</EmptyState>
-          ) : (
-            <div className="-mx-4 overflow-x-auto sm:mx-0">
-              <table className="w-full min-w-[360px] text-sm">
-                <thead className="border-b border-border text-xs uppercase tracking-wide text-muted">
-                  <tr>
-                    <th className="px-4 py-2 text-left font-medium sm:px-3">Producto</th>
-                    <th className="px-4 py-2 text-right font-medium sm:px-3">Cargado</th>
-                    <th className="px-4 py-2 text-right font-medium sm:px-3">Vendido</th>
-                    <th className="px-4 py-2 text-right font-medium sm:px-3">Stock total</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border font-mono">
-                  {combustibles.map((combustible) => {
-                    const resumen = resumenProducto.get(combustible.id) ?? { recargado: 0, vendido: 0 };
-                    const total = tanques
-                      .filter((t) => t.combustibleId === combustible.id)
-                      .reduce((suma, t) => suma + (stockPorTanque.get(t.id) ?? 0), 0);
-                    return (
-                      <tr key={combustible.id}>
-                        <td className="px-4 py-2.5 font-sans font-semibold sm:px-3">{combustible.nombre}</td>
-                        <td className="px-4 py-2.5 text-right text-success sm:px-3">{formatoGalones(resumen.recargado)}</td>
-                        <td className="px-4 py-2.5 text-right sm:px-3">{formatoGalones(resumen.vendido)}</td>
-                        <td className={`px-4 py-2.5 text-right font-bold sm:px-3 ${total < 0 ? 'text-danger' : ''}`}>{formatoGalones(total)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+          <h2 className="card-title"><SlidersHorizontal className="h-5 w-5 text-primary" aria-hidden />Ajuste o merma</h2>
+          <p className="text-sm text-muted">
+            Usa <b>Ajuste</b> para cargar el stock inicial de un tanque o corregirlo (+/−), y <b>Merma</b> para pérdidas
+            (evaporación, derrame). Las ventas no se registran aquí: se calculan al cerrar cada jornada.
+          </p>
+          <form action="/api/movimientos-stock" method="post" className="mt-4 space-y-3">
+            <select name="tanqueId" aria-label="Tanque" className="field" required>
+              <option value="">Selecciona tanque</option>
+              {opcionesTanque(tanques)}
+            </select>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <select name="tipo" aria-label="Tipo" className="field" required>
+                <option value="AJUSTE">Ajuste (+/−)</option>
+                <option value="MERMA">Merma (−)</option>
+              </select>
+              <input name="galones" type="number" inputMode="decimal" step="0.01" placeholder="Galones" aria-label="Galones" className="field" required />
+              <input name="fecha" type="date" defaultValue={hoy} aria-label="Fecha" className="field" />
+              <input name="nota" placeholder="Motivo" aria-label="Motivo" className="field" />
             </div>
-          )}
+            <button type="submit" className="btn-ghost w-full sm:w-auto">Guardar</button>
+          </form>
         </div>
       </section>
 
-      <section className="grid items-start gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <section>
         <div className="card">
           <h2 className="card-title"><History className="h-5 w-5 text-primary" aria-hidden />Últimos movimientos</h2>
           {movimientos.length === 0 ? (
@@ -214,23 +155,23 @@ export default async function InventarioPage({
                     <span className={`${tipo.clase} w-20 justify-center`}>{tipo.etiqueta}</span>
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium">
-                        {movimiento.tanque.combustible.nombre} · {movimiento.tanque.estacion.nombre}
+                        {movimiento.tanque.combustible.nombre} en {movimiento.tanque.estacion.nombre}
                       </p>
                       <p className="truncate text-xs text-muted">
                         {formatoFecha(movimiento.fecha)}
                         {movimiento.jornadaId ? (
                           <>
-                            {' · '}
+                            {', '}
                             <Link href={`/jornadas/${movimiento.jornadaId}`} className="text-primary hover:underline">
                               jornada #{movimiento.jornadaId}
                             </Link>
                           </>
                         ) : movimiento.nota ? (
-                          ` · ${movimiento.nota}`
+                          `, ${movimiento.nota}`
                         ) : null}
                       </p>
                     </div>
-                    <span className={`shrink-0 font-mono font-semibold ${galones >= 0 ? 'text-success' : 'text-fg'}`}>
+                    <span className={`shrink-0 tabular-nums font-semibold ${galones >= 0 ? 'text-success' : 'text-fg'}`}>
                       {galones >= 0 ? '+' : ''}{formatoGalones(galones)}
                     </span>
                   </li>
@@ -238,59 +179,37 @@ export default async function InventarioPage({
               })}
             </ul>
           )}
-        </div>
 
-        <div className="space-y-6">
-          <details className="card group">
-            <summary className="card-title mb-0 cursor-pointer list-none">
-              <SlidersHorizontal className="h-5 w-5 text-primary" aria-hidden />Ajuste o merma
-            </summary>
-            <p className="mt-3 text-xs text-muted">
-              Usa <b>Ajuste</b> para cargar el stock inicial de un tanque o corregirlo (+/−), y <b>Merma</b> para pérdidas
-              (evaporación, derrame). Las ventas no se registran aquí: se calculan al cerrar cada jornada.
-            </p>
-            <form action="/api/movimientos-stock" method="post" className="mt-3 space-y-3">
-              <select name="tanqueId" aria-label="Tanque" className="field" required>
-                <option value="">Selecciona tanque</option>
-                {opcionesTanque(tanques)}
-              </select>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <select name="tipo" aria-label="Tipo" className="field" required>
-                  <option value="AJUSTE">Ajuste (+/−)</option>
-                  <option value="MERMA">Merma (−)</option>
-                </select>
-                <input name="galones" type="number" inputMode="decimal" step="0.01" placeholder="Galones" aria-label="Galones" className="field" required />
-                <input name="fecha" type="date" defaultValue={hoy} aria-label="Fecha" className="field" />
-                <input name="nota" placeholder="Motivo" aria-label="Motivo" className="field" />
+          {paginacion.totalPaginas > 1 && (
+            <nav aria-label="Páginas de movimientos" className="mt-4 flex items-center justify-between gap-3 border-t border-border pt-4 text-sm">
+              <p className="tabular-nums text-muted">
+                {paginacion.desde}–{paginacion.hasta} de {totalMovimientos}
+              </p>
+              <div className="flex items-center gap-2">
+                {paginacion.pagina > 1 ? (
+                  <Link href={hrefPagina(paginacion.pagina - 1)} scroll={false} className="btn-ghost px-3 py-2" rel="prev">
+                    <ChevronLeft className="h-4 w-4" aria-hidden />Anterior
+                  </Link>
+                ) : (
+                  <span aria-disabled className="btn-ghost pointer-events-none px-3 py-2 opacity-40">
+                    <ChevronLeft className="h-4 w-4" aria-hidden />Anterior
+                  </span>
+                )}
+                <span className="tabular-nums text-muted" aria-current="page">
+                  {paginacion.pagina} / {paginacion.totalPaginas}
+                </span>
+                {paginacion.pagina < paginacion.totalPaginas ? (
+                  <Link href={hrefPagina(paginacion.pagina + 1)} scroll={false} className="btn-ghost px-3 py-2" rel="next">
+                    Siguiente<ChevronRight className="h-4 w-4" aria-hidden />
+                  </Link>
+                ) : (
+                  <span aria-disabled className="btn-ghost pointer-events-none px-3 py-2 opacity-40">
+                    Siguiente<ChevronRight className="h-4 w-4" aria-hidden />
+                  </span>
+                )}
               </div>
-              <button type="submit" className="btn-ghost w-full sm:w-auto">Guardar</button>
-            </form>
-          </details>
-
-          <details className="card">
-            <summary className="card-title mb-0 cursor-pointer list-none">
-              <PlusCircle className="h-5 w-5 text-primary" aria-hidden />Crear tanque
-            </summary>
-            <form action="/api/tanques" method="post" className="mt-3 space-y-3">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <select name="estacionId" aria-label="Estación" className="field" required>
-                  <option value="">Selecciona estación</option>
-                  {estaciones.map((estacion) => (
-                    <option key={estacion.id} value={estacion.id}>{estacion.nombre}</option>
-                  ))}
-                </select>
-                <select name="combustibleId" aria-label="Combustible" className="field" required>
-                  <option value="">Selecciona producto</option>
-                  {combustibles.map((combustible) => (
-                    <option key={combustible.id} value={combustible.id}>{combustible.nombre}</option>
-                  ))}
-                </select>
-                <input name="capacidad" type="number" inputMode="decimal" step="0.01" min="0" placeholder="Capacidad (gal)" aria-label="Capacidad" className="field" required />
-                <input name="minimo" type="number" inputMode="decimal" step="0.01" min="0" placeholder="Mínimo (gal)" aria-label="Mínimo" className="field" required />
-              </div>
-              <button type="submit" className="btn-ghost w-full sm:w-auto">Guardar tanque</button>
-            </form>
-          </details>
+            </nav>
+          )}
         </div>
       </section>
     </div>

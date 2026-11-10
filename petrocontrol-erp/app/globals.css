@@ -85,6 +85,22 @@
   }
 }
 
+/*
+ * Esquinas rectas en toda la app: las utilidades rounded-* de Tailwind leen estas variables.
+ * Se redefinen en :root fuera de capas para que ganen a los valores por defecto (@layer theme).
+ */
+:root {
+  --radius: 0;
+  --radius-xs: 0;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+  --radius-2xl: 0;
+  --radius-3xl: 0;
+  --radius-4xl: 0;
+}
+
 @theme inline {
   --color-primary: var(--primary);
   --color-primary-hover: var(--primary-hover);
@@ -129,7 +145,7 @@ body {
 
 /* Componentes reutilizables (utilidades propias de Tailwind v4) */
 @utility card {
-  @apply rounded-2xl border border-border bg-surface p-4 shadow-sm sm:p-5;
+  @apply rounded-2xl bg-surface-alt p-4 sm:p-5;
 }
 
 @utility card-title {
@@ -137,7 +153,7 @@ body {
 }
 
 @utility item {
-  @apply rounded-xl border border-border bg-surface-alt/60 p-3 text-sm text-fg;
+  @apply rounded-xl bg-surface p-3 text-sm text-fg;
 }
 
 @utility field {
@@ -169,7 +185,7 @@ body {
 }
 
 @utility badge {
-  @apply inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide;
+  @apply inline-flex shrink-0 items-center px-2 py-0.5 text-xs font-medium;
 }
 
 @utility badge-success {

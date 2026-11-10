@@ -93,11 +93,11 @@ export function CerrarJornadaForm({
                     value={v.atras}
                     onChange={(e) => actualizar(id, { atras: e.target.value })}
                     placeholder="ACTUAL"
-                    className="field font-mono"
+                    className="field tabular-nums"
                     aria-describedby={`sa-h-${id}`}
                     required
                   />
-                  <p id={`sa-h-${id}`} className="mt-1 font-mono text-xs text-muted">Anterior: {lectura.entradaAtras}</p>
+                  <p id={`sa-h-${id}`} className="mt-1 tabular-nums text-xs text-muted">Anterior: {lectura.entradaAtras}</p>
                 </div>
                 <div>
                   <label htmlFor={`sd-${id}`} className="label">Adelante</label>
@@ -108,11 +108,11 @@ export function CerrarJornadaForm({
                     value={v.adelante}
                     onChange={(e) => actualizar(id, { adelante: e.target.value })}
                     placeholder="ACTUAL"
-                    className="field font-mono"
+                    className="field tabular-nums"
                     aria-describedby={`sd-h-${id}`}
                     required
                   />
-                  <p id={`sd-h-${id}`} className="mt-1 font-mono text-xs text-muted">Anterior: {lectura.entradaAdelante}</p>
+                  <p id={`sd-h-${id}`} className="mt-1 tabular-nums text-xs text-muted">Anterior: {lectura.entradaAdelante}</p>
                 </div>
               </div>
               {preview && !preview.ok && <p className="mt-2 text-xs font-medium text-danger">{preview.texto}</p>}
@@ -172,7 +172,7 @@ export function CerrarJornadaForm({
               value={totalizador}
               onChange={(e) => setTotalizador(e.target.value)}
               placeholder="0.00"
-              className="field font-mono"
+              className="field tabular-nums"
             />
           </div>
         )}

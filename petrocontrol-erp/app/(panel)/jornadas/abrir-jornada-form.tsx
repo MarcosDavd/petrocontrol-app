@@ -59,7 +59,7 @@ function FilaProducto({ producto }: { producto: MaquinaOpcion['productos'][numbe
             value={atras}
             onChange={(e) => setAtras(e.target.value)}
             placeholder="0.00"
-            className="field font-mono"
+            className="field tabular-nums"
             required
           />
           <AvisoDiferencia previo={producto.previoAtras} actual={atras} />
@@ -73,7 +73,7 @@ function FilaProducto({ producto }: { producto: MaquinaOpcion['productos'][numbe
             value={adelante}
             onChange={(e) => setAdelante(e.target.value)}
             placeholder="0.00"
-            className="field font-mono"
+            className="field tabular-nums"
             required
           />
           <AvisoDiferencia previo={producto.previoAdelante} actual={adelante} />
@@ -200,7 +200,7 @@ export function AbrirJornadaForm({ maquinas, empleados }: { maquinas: MaquinaOpc
             value={totalizador}
             onChange={(e) => setTotalizador(e.target.value)}
             placeholder="0.00"
-            className="field font-mono"
+            className="field tabular-nums"
           />
         </div>
       </div>

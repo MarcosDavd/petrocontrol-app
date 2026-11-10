@@ -28,6 +28,9 @@ export const maquinaSchema = z.object({
   activa: casilla,
 });
 
+/** Edición de una máquina existente desde su detalle (la estación no se cambia). */
+export const maquinaEdicionSchema = maquinaSchema.pick({ nombre: true });
+
 export const combustibleSchema = z.object({
   nombre: z.string().trim().min(2, 'El nombre del combustible es obligatorio.'),
 });

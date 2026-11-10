@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { responderError } from '@/lib/respuesta-formulario';
 import { db } from '@/lib/db';
 
 /** Activa o desactiva una máquina. Body: activa=true|false */
@@ -6,7 +7,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ maq
   const { maquinaId } = await params;
   const id = Number(maquinaId);
   if (!Number.isInteger(id) || id <= 0) {
-    return NextResponse.json({ error: 'Máquina inválida.' }, { status: 400 });
+    return responderError(request, 'Máquina inválida.', 400);
   }
 
   const contentType = request.headers.get('content-type') ?? '';
@@ -18,14 +19,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ maq
   if (!activa) {
     const abierta = await db.jornada.findFirst({ where: { maquinaId: id, estado: 'ABIERTA' } });
     if (abierta) {
-      return NextResponse.json({ error: 'La máquina tiene una jornada abierta. Ciérrala antes de desactivarla.' }, { status: 409 });
+      return responderError(request, 'La máquina tiene una jornada abierta. Ciérrala antes de deshabilitarla.', 409);
     }
   }
 
   await db.maquina.update({ where: { id }, data: { activa } });
 
   if (!contentType.includes('application/json')) {
-    return NextResponse.redirect(new URL('/estaciones', request.url), 303);
+    return NextResponse.redirect(new URL(`/estaciones/maquinas/${id}`, request.url), 303);
   }
   return NextResponse.json({ ok: true, activa });
 }

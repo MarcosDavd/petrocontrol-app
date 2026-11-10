@@ -1,40 +1,16 @@
-import { Building2, Monitor, Plus, Power } from 'lucide-react';
+import Link from 'next/link';
+import { Building2, ChevronRight, Monitor, Plus } from 'lucide-react';
 import { db } from '@/lib/db';
 import { EmptyState, PageHeader } from '@/components/page-header';
+import { BotonEstado } from '@/components/boton-estado';
 
 export const metadata = { title: 'Estaciones y máquinas' };
-
-function BotonEstado({ accion, activa, bloqueado }: { accion: string; activa: boolean; bloqueado?: string }) {
-  if (bloqueado && activa) {
-    return <span className="text-xs text-muted" title={bloqueado}>En uso</span>;
-  }
-  return (
-    <form action={accion} method="post">
-      <input type="hidden" name="activa" value={activa ? 'false' : 'true'} />
-      <button
-        type="submit"
-        className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition ${
-          activa ? 'text-muted hover:bg-danger-light hover:text-danger' : 'text-primary hover:bg-primary-light'
-        }`}
-      >
-        <Power className="h-3.5 w-3.5" aria-hidden />
-        {activa ? 'Desactivar' : 'Activar'}
-      </button>
-    </form>
-  );
-}
 
 export default async function EstacionesPage() {
   const [estaciones, combustibles] = await Promise.all([
     db.estacion.findMany({
       include: {
-        maquinas: {
-          include: {
-            productos: { include: { combustible: true }, orderBy: { combustibleId: 'asc' } },
-            jornadas: { where: { estado: 'ABIERTA' }, select: { id: true }, take: 1 },
-          },
-          orderBy: { nombre: 'asc' },
-        },
+        maquinas: { select: { id: true, nombre: true, activa: true }, orderBy: { nombre: 'asc' } },
         jornadas: { where: { estado: 'ABIERTA' }, select: { id: true }, take: 1 },
       },
       orderBy: { nombre: 'asc' },
@@ -46,10 +22,10 @@ export default async function EstacionesPage() {
     <div className="space-y-6">
       <PageHeader
         title="Estaciones y máquinas"
-        description="Grifos, sus máquinas y los productos que despacha cada una (manguera atrás y adelante por producto)."
+        description="Grifos, sus máquinas y los productos que despacha cada una. Aquí también se crean los tanques."
       />
 
-      <section className="grid items-start gap-6 lg:grid-cols-2">
+      <section className="grid items-start gap-6 lg:grid-cols-2 2xl:grid-cols-3">
         <div className="card">
           <h2 className="card-title"><Plus className="h-5 w-5 text-primary" aria-hidden />Nueva estación</h2>
           <form action="/api/estaciones" method="post" className="space-y-3">
@@ -89,6 +65,41 @@ export default async function EstacionesPage() {
             <button type="submit" className="btn-primary w-full sm:w-auto">Guardar máquina</button>
           </form>
         </div>
+
+        <div className="card lg:col-span-2 2xl:col-span-1">
+          <h2 className="card-title"><Plus className="h-5 w-5 text-primary" aria-hidden />Nuevo tanque</h2>
+          <form action="/api/tanques" method="post" className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-2">
+              <div>
+                <label htmlFor="t-estacion" className="label">Estación</label>
+                <select id="t-estacion" name="estacionId" className="field" required>
+                  <option value="">Selecciona estación</option>
+                  {estaciones.map((estacion) => (
+                    <option key={estacion.id} value={estacion.id}>{estacion.nombre}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="t-producto" className="label">Producto</label>
+                <select id="t-producto" name="combustibleId" className="field" required>
+                  <option value="">Selecciona producto</option>
+                  {combustibles.map((combustible) => (
+                    <option key={combustible.id} value={combustible.id}>{combustible.nombre}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="t-capacidad" className="label">Capacidad (galones)</label>
+                <input id="t-capacidad" name="capacidad" type="number" inputMode="decimal" step="0.01" min="0" className="field" required />
+              </div>
+              <div>
+                <label htmlFor="t-minimo" className="label">Mínimo de alerta (galones)</label>
+                <input id="t-minimo" name="minimo" type="number" inputMode="decimal" step="0.01" min="0" className="field" required />
+              </div>
+            </div>
+            <button type="submit" className="btn-primary w-full sm:w-auto">Guardar tanque</button>
+          </form>
+        </div>
       </section>
 
       {estaciones.length === 0 ? (
@@ -105,11 +116,12 @@ export default async function EstacionesPage() {
                 <p className="text-sm text-muted">{estacion.direccion || 'Sin dirección registrada'}</p>
               </div>
               <div className="flex items-center gap-2">
-                <span className={estacion.activa ? 'badge-success' : 'badge-neutral'}>{estacion.activa ? 'Activa' : 'Inactiva'}</span>
                 <BotonEstado
                   accion={`/api/estaciones/${estacion.id}/estado`}
                   activa={estacion.activa}
                   bloqueado={estacion.jornadas.length > 0 ? 'Tiene jornadas abiertas' : undefined}
+                  tipo="estacion"
+                  nombre={estacion.nombre}
                 />
               </div>
             </div>
@@ -117,65 +129,22 @@ export default async function EstacionesPage() {
             {estacion.maquinas.length === 0 ? (
               <EmptyState>Esta estación no tiene máquinas.</EmptyState>
             ) : (
-              <ul className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-                {estacion.maquinas.map((maquina) => {
-                  const asignados = new Set(maquina.productos.map((p) => p.combustibleId));
-                  const enUso = maquina.jornadas.length > 0;
-                  return (
-                    <li key={maquina.id} className={`item ${maquina.activa ? '' : 'opacity-70'}`}>
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="flex min-w-0 items-center gap-2 font-semibold">
-                          <Monitor className="h-4 w-4 shrink-0 text-muted" aria-hidden />
-                          <span className="truncate">{maquina.nombre}</span>
-                        </p>
-                        <div className="flex items-center gap-1">
-                          {enUso && <span className="badge-warning">En jornada</span>}
-                          {!maquina.activa && <span className="badge-neutral">Inactiva</span>}
-                          <BotonEstado
-                            accion={`/api/maquinas/${maquina.id}/estado`}
-                            activa={maquina.activa}
-                            bloqueado={enUso ? 'Tiene una jornada abierta' : undefined}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {maquina.productos.length === 0 ? (
-                          <span className="badge-danger">Sin productos</span>
-                        ) : (
-                          maquina.productos.map((p) => (
-                            <span key={p.combustibleId} className="badge-neutral">{p.combustible.nombre}</span>
-                          ))
-                        )}
-                      </div>
-
-                      <details className="mt-2">
-                        <summary className="cursor-pointer text-xs font-medium text-primary">Editar productos</summary>
-                        {enUso ? (
-                          <p className="mt-2 text-xs text-muted">Tiene una jornada abierta: ciérrala para editar sus productos.</p>
-                        ) : (
-                          <form action={`/api/maquinas/${maquina.id}/productos`} method="post" className="mt-2 space-y-2">
-                            <div className="flex flex-wrap gap-x-4 gap-y-1">
-                              {combustibles.map((combustible) => (
-                                <label key={combustible.id} className="flex items-center gap-2 text-sm">
-                                  <input
-                                    type="checkbox"
-                                    name="combustibleIds"
-                                    value={combustible.id}
-                                    defaultChecked={asignados.has(combustible.id)}
-                                    className="check"
-                                  />
-                                  {combustible.nombre}
-                                </label>
-                              ))}
-                            </div>
-                            <button type="submit" className="btn-ghost px-3 py-1.5 text-xs">Guardar productos</button>
-                          </form>
-                        )}
-                      </details>
-                    </li>
-                  );
-                })}
+              <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                {estacion.maquinas.map((maquina) => (
+                  <li key={maquina.id}>
+                    <Link
+                      href={`/estaciones/maquinas/${maquina.id}`}
+                      className={`group flex items-center gap-3 bg-surface px-4 py-3 text-sm transition-colors hover:bg-primary-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary ${
+                        maquina.activa ? 'text-fg' : 'text-muted'
+                      }`}
+                    >
+                      <Monitor className="h-4 w-4 shrink-0 text-muted" aria-hidden />
+                      <span className="min-w-0 flex-1 truncate font-medium">{maquina.nombre}</span>
+                      {!maquina.activa && <span className="text-xs">Deshabilitada</span>}
+                      <ChevronRight className="h-4 w-4 shrink-0 text-muted group-hover:text-primary" aria-hidden />
+                    </Link>
+                  </li>
+                ))}
               </ul>
             )}
           </section>

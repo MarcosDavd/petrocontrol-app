@@ -36,7 +36,7 @@ export default async function ProductosPage() {
                       <p className="text-base font-bold">{combustible.nombre}</p>
                       {!vigente && <span className="badge-danger">Sin precio</span>}
                     </div>
-                    <p className={`mt-1 font-mono text-2xl font-bold ${vigente ? 'text-primary' : 'text-muted'}`}>
+                    <p className={`mt-1 tabular-nums text-2xl font-bold ${vigente ? 'text-primary' : 'text-muted'}`}>
                       {vigente ? formatoSoles(vigente.precio) : '—'}
                       <span className="ml-1 font-sans text-xs font-normal text-muted">/ galón</span>
                     </p>
@@ -49,7 +49,7 @@ export default async function ProductosPage() {
                       </p>
                     )}
                     <p className="mt-2 text-xs text-muted">
-                      {combustible._count.maquinas} máquina(s) · {combustible._count.tanques} tanque(s)
+                      {combustible._count.maquinas} máquina(s) y {combustible._count.tanques} tanque(s)
                     </p>
                   </li>
                 );
@@ -114,12 +114,12 @@ export default async function ProductosPage() {
               .filter((c) => c.precios.length > 0)
               .map((combustible) => (
                 <div key={combustible.id}>
-                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted">{combustible.nombre}</h3>
+                  <h3 className="mb-2 text-sm font-semibold text-fg">{combustible.nombre}</h3>
                   <ul className="divide-y divide-border rounded-xl border border-border">
                     {combustible.precios.map((precio) => (
                       <li key={precio.id} className="flex items-center justify-between px-3 py-2 text-sm">
                         <span className="text-muted">{formatoFecha(precio.vigenteDesde)}</span>
-                        <span className="font-mono font-semibold">{formatoSoles(precio.precio)}</span>
+                        <span className="tabular-nums font-semibold">{formatoSoles(precio.precio)}</span>
                       </li>
                     ))}
                   </ul>

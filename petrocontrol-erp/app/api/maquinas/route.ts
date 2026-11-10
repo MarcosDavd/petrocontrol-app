@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { responderError } from '@/lib/respuesta-formulario';
 import { db } from '@/lib/db';
 import { maquinaSchema } from '@/lib/validation/maestros';
 
@@ -29,10 +30,7 @@ export async function POST(request: Request) {
     const parsed = maquinaSchema.safeParse(rawData);
 
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: parsed.error.issues[0]?.message ?? 'Datos inválidos.' },
-        { status: 400 }
-      );
+      return responderError(request, parsed.error.issues[0]?.message ?? 'Datos inválidos.', 400);
     }
 
     const data = parsed.data;
@@ -52,6 +50,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, maquina }, { status: 201 });
   } catch (error) {
     console.error('MAQUINA_CREATE_ERROR', error);
-    return NextResponse.json({ error: 'No se pudo crear la máquina.' }, { status: 500 });
+    return responderError(request, 'No se pudo crear la máquina.', 500);
   }
 }
