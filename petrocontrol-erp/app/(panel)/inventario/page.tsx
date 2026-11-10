@@ -1,13 +1,37 @@
 import Link from 'next/link';
-import { CircleAlert, Fuel, History, PlusCircle, SlidersHorizontal, Truck } from 'lucide-react';
+import { History, PlusCircle, SlidersHorizontal, Truck } from 'lucide-react';
 import { db } from '@/lib/db';
 import { EmptyState, PageHeader } from '@/components/page-header';
+import { InventarioTanques, type TanqueResumen } from '@/components/inventario-tanques';
 import { formatoFecha, formatoGalones } from '@/lib/formato';
+import { estadoTanque, historialStock, PERIODOS } from '@/lib/inventario';
 import { fechaHoraLima, hoyLima, sumarDias } from '@/lib/zona-horaria';
 
 export const metadata = { title: 'Inventario' };
 
 const DIAS_RESUMEN = 30;
+
+/** Stock diario de un tanque en los últimos `dias` días (incluido hoy). */
+async function getHistorial(tanqueId: number, dias: number) {
+  const hasta = hoyLima();
+  const desde = sumarDias(hasta, -(dias - 1));
+  const inicio = fechaHoraLima(desde);
+
+  const [previo, movimientos] = await Promise.all([
+    db.movimientoStock.aggregate({ where: { tanqueId, fecha: { lt: inicio } }, _sum: { galones: true } }),
+    db.movimientoStock.findMany({
+      where: { tanqueId, fecha: { gte: inicio } },
+      select: { fecha: true, galones: true },
+    }),
+  ]);
+
+  return historialStock(
+    Number(previo._sum.galones ?? 0),
+    movimientos.map((m) => ({ fecha: m.fecha, galones: Number(m.galones) })),
+    desde,
+    hasta
+  );
+}
 
 async function getInventario() {
   const desde = fechaHoraLima(sumarDias(hoyLima(), -DIAS_RESUMEN));
@@ -65,9 +89,38 @@ function opcionesTanque(tanques: Awaited<ReturnType<typeof getInventario>>['tanq
   ));
 }
 
-export default async function InventarioPage() {
+export default async function InventarioPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tanque?: string; dias?: string }>;
+}) {
+  const params = await searchParams;
   const { estaciones, combustibles, tanques, stockPorTanque, resumenProducto, movimientos } = await getInventario();
   const hoy = hoyLima();
+
+  const resumenTanques: TanqueResumen[] = tanques.map((tanque) => {
+    const stock = stockPorTanque.get(tanque.id) ?? 0;
+    const capacidad = Number(tanque.capacidad);
+    const minimo = Number(tanque.minimo);
+    return {
+      id: tanque.id,
+      producto: tanque.combustible.nombre,
+      estacion: tanque.estacion.nombre,
+      estacionId: tanque.estacionId,
+      stock,
+      capacidad,
+      minimo,
+      ...estadoTanque(stock, capacidad, minimo),
+    };
+  });
+
+  // Tanque a detallar: el de la URL; si no hay, el primero con alerta; si no, el primero.
+  const seleccionado =
+    resumenTanques.find((t) => t.id === Number(params.tanque)) ??
+    resumenTanques.find((t) => t.nivel === 'revisar' || t.nivel === 'bajo') ??
+    resumenTanques[0];
+  const dias = PERIODOS.find((p) => p === Number(params.dias)) ?? PERIODOS[0];
+  const historial = seleccionado ? await getHistorial(seleccionado.id, dias) : [];
 
   return (
     <div className="space-y-6">
@@ -76,84 +129,10 @@ export default async function InventarioPage() {
         description="Stock de cada tanque: recargas registradas menos lo vendido según los contadores de las jornadas."
       />
 
-      {/* Estado de tanques por estación */}
-      {tanques.length === 0 ? (
-        <section className="card"><EmptyState>No hay tanques registrados.</EmptyState></section>
+      {seleccionado ? (
+        <InventarioTanques tanques={resumenTanques} seleccionadoId={seleccionado.id} historial={historial} dias={dias} />
       ) : (
-        estaciones
-          .filter((estacion) => tanques.some((t) => t.estacionId === estacion.id))
-          .map((estacion) => (
-            <section key={estacion.id} className="card">
-              <h2 className="card-title"><Fuel className="h-5 w-5 text-primary" aria-hidden />Tanques · {estacion.nombre}</h2>
-              <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
-                {tanques
-                  .filter((t) => t.estacionId === estacion.id)
-                  .map((tanque) => {
-                    const stock = stockPorTanque.get(tanque.id) ?? 0;
-                    const capacidad = Number(tanque.capacidad);
-                    const minimo = Number(tanque.minimo);
-                    const porcentaje = capacidad > 0 ? Math.max(0, Math.min((stock / capacidad) * 100, 100)) : 0;
-                    const negativo = stock < 0;
-                    const bajoMinimo = stock <= minimo;
-                    const libre = Math.max(0, capacidad - stock);
-
-                    return (
-                      <div key={tanque.id} className="item p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <p className="text-base font-bold">{tanque.combustible.nombre}</p>
-                          <span className={negativo || bajoMinimo ? 'badge-danger' : 'badge-success'}>
-                            {negativo ? 'Revisar' : bajoMinimo ? 'Bajo mínimo' : 'Normal'}
-                          </span>
-                        </div>
-
-                        <p className={`mt-2 font-mono text-2xl font-bold ${negativo ? 'text-danger' : 'text-fg'}`}>
-                          {formatoGalones(stock)}
-                        </p>
-
-                        <div className="mt-2 flex items-center gap-3">
-                          <div
-                            className="h-2.5 flex-1 overflow-hidden rounded-full bg-border"
-                            role="progressbar"
-                            aria-valuenow={Math.round(porcentaje)}
-                            aria-valuemin={0}
-                            aria-valuemax={100}
-                            aria-label={`Nivel del tanque de ${tanque.combustible.nombre}`}
-                          >
-                            <div
-                              className={`h-full rounded-full ${bajoMinimo ? 'bg-danger' : porcentaje < 30 ? 'bg-accent' : 'bg-primary'}`}
-                              style={{ width: `${porcentaje}%` }}
-                            />
-                          </div>
-                          <span className="w-10 text-right text-xs font-semibold text-muted">{Math.round(porcentaje)}%</span>
-                        </div>
-
-                        <dl className="mt-3 grid grid-cols-3 gap-2 text-xs">
-                          <div>
-                            <dt className="text-muted">Capacidad</dt>
-                            <dd className="font-semibold">{formatoGalones(capacidad)}</dd>
-                          </div>
-                          <div>
-                            <dt className="text-muted">Mínimo</dt>
-                            <dd className="font-semibold">{formatoGalones(minimo)}</dd>
-                          </div>
-                          <div>
-                            <dt className="text-muted">Espacio libre</dt>
-                            <dd className="font-semibold">{formatoGalones(libre)}</dd>
-                          </div>
-                        </dl>
-
-                        {negativo && (
-                          <p className="mt-2 flex items-start gap-1 text-xs text-danger">
-                            <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-                            Se vendió más de lo registrado: falta registrar una recarga o el stock inicial (ajuste).
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })}
-              </div>
-            </section>
-          ))
+        <section className="card"><EmptyState>No hay tanques registrados.</EmptyState></section>
       )}
 
       <section className="grid items-start gap-6 xl:grid-cols-2">
