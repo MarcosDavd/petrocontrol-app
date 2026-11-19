@@ -1,11 +1,34 @@
 import { z } from 'zod';
 
-export const tanqueSchema = z.object({
-  estacionId: z.coerce.number().int().positive('La estación es obligatoria.'),
-  combustibleId: z.coerce.number().int().positive('El combustible es obligatorio.'),
-  capacidad: z.coerce.number().min(0, 'La capacidad no puede ser negativa.'),
-  minimo: z.coerce.number().min(0, 'El mínimo no puede ser negativo.'),
-});
+/** Capacidad (máximo) y mínimo de alerta de un tanque, en galones. */
+const limitesTanque = {
+  capacidad: z.coerce
+    .number({ error: 'Ingresa la capacidad.' })
+    .positive('La capacidad debe ser mayor a 0.')
+    .max(10_000_000, 'La capacidad es demasiado grande.'),
+  minimo: z.coerce.number({ error: 'Ingresa el mínimo.' }).min(0, 'El mínimo no puede ser negativo.'),
+};
+
+const minimoMenorQueCapacidad = {
+  check: (datos: { capacidad: number; minimo: number }) => datos.minimo < datos.capacidad,
+  mensaje: { message: 'El mínimo de alerta debe ser menor que la capacidad del tanque.', path: ['minimo'] },
+};
+
+export const tanqueSchema = z
+  .object({
+    estacionId: z.coerce.number().int().positive('La estación es obligatoria.'),
+    combustibleId: z.coerce.number().int().positive('El combustible es obligatorio.'),
+    ...limitesTanque,
+  })
+  .refine(minimoMenorQueCapacidad.check, minimoMenorQueCapacidad.mensaje);
+
+/** Edición de un tanque existente: solo sus límites (estación y producto no cambian). */
+export const limitesTanqueSchema = z
+  .object({
+    tanqueId: z.coerce.number().int().positive('Tanque inválido.'),
+    ...limitesTanque,
+  })
+  .refine(minimoMenorQueCapacidad.check, minimoMenorQueCapacidad.mensaje);
 
 export const movimientoStockSchema = z.object({
   tanqueId: z.coerce.number().int().positive('El tanque es obligatorio.'),

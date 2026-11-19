@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useActionState, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { CircleAlert } from 'lucide-react';
+import { CircleAlert, CircleCheck, Pencil } from 'lucide-react';
+import { actualizarLimitesTanqueAction, type EstadoTanque } from '@/app/(panel)/inventario/actions';
 import { formatoGalones } from '@/lib/formato';
 import { ETIQUETA_NIVEL, type NivelTanque, type TanqueResumen } from '@/lib/inventario';
 import { COLOR_TEXTO_NIVEL, Torta } from '@/components/torta-tanque';
@@ -15,6 +16,75 @@ const BADGE: Record<NivelTanque, string> = {
   medio: 'badge-warning',
   normal: 'badge-success',
 };
+
+/** Capacidad (máximo) y mínimo de alerta. Campos controlados: un error no borra lo escrito. */
+function EditarLimites({ tanque }: { tanque: TanqueResumen }) {
+  const [estado, formAction, pending] = useActionState<EstadoTanque, FormData>(actualizarLimitesTanqueAction, {});
+  const [capacidad, setCapacidad] = useState(String(tanque.capacidad));
+  const [minimo, setMinimo] = useState(String(tanque.minimo));
+  const id = `tanque-${tanque.id}`;
+
+  return (
+    <details className="mt-3">
+      <summary className="inline-flex cursor-pointer items-center gap-1 text-xs font-medium text-primary">
+        <Pencil className="h-3.5 w-3.5" aria-hidden /> Editar capacidad y mínimo
+      </summary>
+      <form action={formAction} className="mt-3 space-y-2">
+        <input type="hidden" name="tanqueId" value={tanque.id} />
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label htmlFor={`${id}-capacidad`} className="label">Capacidad (gal)</label>
+            <input
+              id={`${id}-capacidad`}
+              name="capacidad"
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              min="0.01"
+              value={capacidad}
+              onChange={(e) => setCapacidad(e.target.value)}
+              className="field tabular-nums"
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor={`${id}-minimo`} className="label">Mínimo (gal)</label>
+            <input
+              id={`${id}-minimo`}
+              name="minimo"
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              min="0"
+              value={minimo}
+              onChange={(e) => setMinimo(e.target.value)}
+              className="field tabular-nums"
+              required
+            />
+          </div>
+        </div>
+        {Number(capacidad) > 0 && Number(capacidad) < tanque.stock && (
+          <p className="text-xs text-warning">
+            La capacidad es menor que el stock actual ({formatoGalones(tanque.stock)}): revisa el valor.
+          </p>
+        )}
+        {estado.error && (
+          <p role="alert" className="rounded-lg border border-danger/40 bg-danger-light px-3 py-2 text-xs text-danger">
+            {estado.error}
+          </p>
+        )}
+        {estado.ok && !pending && (
+          <p role="status" className="flex items-center gap-1 text-xs text-primary">
+            <CircleCheck className="h-3.5 w-3.5" aria-hidden /> Cambios guardados.
+          </p>
+        )}
+        <button type="submit" disabled={pending} className="btn-ghost px-3 py-1.5 text-xs">
+          {pending ? 'Guardando…' : 'Guardar'}
+        </button>
+      </form>
+    </details>
+  );
+}
 
 function TortaTanque({ tanque }: { tanque: TanqueResumen }) {
   const porcentaje = Math.round(tanque.porcentaje);
@@ -60,6 +130,8 @@ function TortaTanque({ tanque }: { tanque: TanqueResumen }) {
           Se vendió más de lo registrado. Registra la recarga o el stock inicial con un ajuste.
         </p>
       )}
+
+      <EditarLimites tanque={tanque} />
     </article>
   );
 }

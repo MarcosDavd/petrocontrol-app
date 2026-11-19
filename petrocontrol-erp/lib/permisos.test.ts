@@ -16,17 +16,17 @@ describe('puedeEntrar', () => {
     }
   });
 
-  it('el empleado solo entra a sus jornadas y a su cuenta', () => {
-    for (const ruta of ['/jornadas', '/jornadas/', '/jornadas/12', '/cuenta']) {
+  it('el empleado entra a sus jornadas (también a corregirlas) y a su cuenta', () => {
+    for (const ruta of ['/jornadas', '/jornadas/', '/jornadas/12', '/jornadas/12/editar', '/cuenta']) {
       expect(puedeEntrar('EMPLEADO', ruta)).toBe(true);
     }
   });
 
-  it('el empleado no edita jornadas ni ve administración o API', () => {
+  it('el empleado no ve administración ni la API', () => {
     for (const ruta of [
       '/',
       '/home',
-      '/jornadas/12/editar',
+      '/jornadas/12/borrar',
       '/jornadas/abc',
       '/reportes',
       '/inventario',

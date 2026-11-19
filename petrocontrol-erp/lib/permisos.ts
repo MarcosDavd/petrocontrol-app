@@ -18,10 +18,10 @@ export function esRutaPublica(pathname: string) {
 }
 
 /**
- * Un empleado solo ve la lista de jornadas, el detalle de una jornada (para cerrarla) y su cuenta.
- * La edición de jornadas, los reportes, el inventario y la configuración son del admin.
+ * Un empleado solo ve la lista de jornadas, el detalle y la corrección de una jornada (la página
+ * comprueba que sea suya) y su cuenta. Los reportes, el inventario y la configuración son del admin.
  */
-const RUTAS_EMPLEADO = [/^\/jornadas$/, /^\/jornadas\/\d+$/, /^\/cuenta$/];
+const RUTAS_EMPLEADO = [/^\/jornadas$/, /^\/jornadas\/\d+$/, /^\/jornadas\/\d+\/editar$/, /^\/cuenta$/];
 
 export function puedeEntrar(rol: Rol, pathname: string) {
   if (rol === 'ADMIN') return true;

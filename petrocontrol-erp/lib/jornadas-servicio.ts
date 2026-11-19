@@ -468,6 +468,11 @@ export async function editarJornada(
     entradas: LecturaApertura[];
     /** Obligatorio si la jornada está cerrada. */
     cierre?: { fecha: string; horaManual?: string; totalizadorSalida?: string; lecturas: LecturaCierre[] };
+    /**
+     * Mantiene el inicio y el fin guardados e ignora `fecha`/`horaManual` (corrección hecha por el
+     * empleado: solo cambia lecturas y notas). Sin esto se recalcularían con el horario actual.
+     */
+    conservarFechas?: boolean;
   }
 ) {
   const jornada = await db.jornada.findUnique({ where: { id: jornadaId }, include: INCLUIR_JORNADA });
@@ -483,12 +488,15 @@ export async function editarJornada(
   if (empleado.id !== jornada.empleadoId && !empleado.activo) throw new ErrorNegocio(`${empleado.nombre} está inactivo.`);
   if (!cerrada && empleado.id !== jornada.empleadoId) await exigirEmpleadoLibre(empleado, jornada.id);
 
-  const hora = empleado.horarioInicio || input.horaManual;
-  if (!hora || !HORA_REGEX.test(hora)) {
-    throw new ErrorNegocio(`${empleado.nombre} no tiene horario de trabajo registrado: indica la hora de inicio.`);
+  let inicio = jornada.inicio;
+  if (!input.conservarFechas) {
+    const hora = empleado.horarioInicio || input.horaManual;
+    if (!hora || !HORA_REGEX.test(hora)) {
+      throw new ErrorNegocio(`${empleado.nombre} no tiene horario de trabajo registrado: indica la hora de inicio.`);
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(input.fecha)) throw new ErrorNegocio('Selecciona la fecha de la jornada.');
+    inicio = fechaHoraLima(input.fecha, hora);
   }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.fecha)) throw new ErrorNegocio('Selecciona la fecha de la jornada.');
-  const inicio = fechaHoraLima(input.fecha, hora);
 
   const entradas: Entradas = new Map(
     jornada.lecturas.map((lectura) => {
@@ -506,7 +514,10 @@ export async function editarJornada(
 
   let cierreCalculado: { fin: Date; cierres: CierreProducto[]; totalizador: ReturnType<typeof calcularTotalizador> } | null = null;
   if (cerrada && input.cierre) {
-    const fin = calcularFin(empleado, input.cierre.fecha, input.cierre.horaManual, inicio);
+    const fin =
+      input.conservarFechas && jornada.fin
+        ? jornada.fin
+        : calcularFin(empleado, input.cierre.fecha, input.cierre.horaManual, inicio);
     const cierres = await calcularCierre(jornada, inicio, entradas, input.cierre.lecturas);
     cierreCalculado = { fin, cierres, totalizador: calcularTotalizador(jornada, totalizadorEntrada, input.cierre.totalizadorSalida) };
   }

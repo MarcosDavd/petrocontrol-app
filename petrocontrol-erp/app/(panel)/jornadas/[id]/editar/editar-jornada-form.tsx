@@ -5,6 +5,8 @@ import { useActionState, useState } from 'react';
 import { aCentesimas, deCentesimas, type DireccionContador } from '@/lib/calculos';
 import { calcularGalonesLectura } from '@/lib/jornada';
 import { editarJornadaAction, type EstadoFormulario } from '../../actions';
+import { formatoFechaHora } from '@/lib/formato';
+import { fechaHoraLima } from '@/lib/zona-horaria';
 
 export type LecturaEditable = {
   combustibleId: number;
@@ -87,6 +89,7 @@ function CampoLectura({
 export function EditarJornadaForm({
   jornadaId,
   cerrada,
+  soloLecturas = false,
   empleados,
   empleadoId: empleadoInicial,
   fecha: fechaInicial,
@@ -102,6 +105,11 @@ export function EditarJornadaForm({
 }: {
   jornadaId: number;
   cerrada: boolean;
+  /**
+   * Corrección hecha por el empleado: lecturas, totalizador y notas. El empleado, la fecha y la hora
+   * se muestran fijos (el servidor conserva los guardados) y solo los cambia el admin.
+   */
+  soloLecturas?: boolean;
   empleados: EmpleadoOpcion[];
   empleadoId: number;
   fecha: string;
@@ -135,75 +143,94 @@ export function EditarJornadaForm({
     <form action={formAction} className="space-y-8">
       <input type="hidden" name="jornadaId" value={jornadaId} />
 
-      <section aria-labelledby="ed-datos" className="space-y-3">
-        <h3 id="ed-datos" className="text-base font-semibold text-fg">Datos de la jornada</h3>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label htmlFor="ed-empleado" className="label">Empleado</label>
-            <select
-              id="ed-empleado"
-              name="empleadoId"
-              value={empleadoId}
-              onChange={(e) => setEmpleadoId(Number(e.target.value))}
-              className="field"
-              required
-            >
-              {empleados.map((e) => (
-                <option key={e.id} value={e.id} disabled={e.enJornada !== null}>
-                  {e.nombre}
-                  {e.enJornada ? ` (en jornada en ${e.enJornada})` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="ed-fecha" className="label">Fecha de inicio</label>
-            <input id="ed-fecha" name="fecha" type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="field" required />
-            {empleado?.horarioInicio ? (
-              <p className="mt-1 text-xs text-muted">
-                Empieza a las <b className="text-fg">{empleado.horarioInicio}</b> según el horario de {empleado.nombre}.
-              </p>
-            ) : (
-              <div className="mt-2">
-                <label htmlFor="ed-hora" className="label">Hora de inicio ({empleado?.nombre} no tiene horario)</label>
-                <input id="ed-hora" name="hora" type="time" value={hora} onChange={(e) => setHora(e.target.value)} className="field" required />
-              </div>
-            )}
-          </div>
-          {cerrada && (
+      {soloLecturas ? (
+        <section aria-labelledby="ed-datos" className="space-y-2">
+          <h3 id="ed-datos" className="text-base font-semibold text-fg">Datos de la jornada</h3>
+          <p className="text-sm text-muted">
+            {empleado?.nombre}. Desde {formatoFechaHora(fechaHoraLima(fechaInicial, horaInicial))}
+            {cerrada && fechaCierreInicial && horaCierreInicial
+              ? ` hasta ${formatoFechaHora(fechaHoraLima(fechaCierreInicial, horaCierreInicial))}`
+              : ''}
+            . Si la fecha o la hora están mal, pide al administrador que las corrija.
+          </p>
+          {/* El esquema del formulario los exige; el servidor conserva los valores guardados */}
+          <input type="hidden" name="empleadoId" value={empleadoId} />
+          <input type="hidden" name="fecha" value={fecha} />
+          <input type="hidden" name="hora" value={hora} />
+          {cerrada && <input type="hidden" name="fechaCierre" value={fechaCierre} />}
+          {cerrada && <input type="hidden" name="horaCierre" value={horaCierre} />}
+        </section>
+      ) : (
+        <section aria-labelledby="ed-datos" className="space-y-3">
+          <h3 id="ed-datos" className="text-base font-semibold text-fg">Datos de la jornada</h3>
+          <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <label htmlFor="ed-fecha-cierre" className="label">Fecha de cierre</label>
-              <input
-                id="ed-fecha-cierre"
-                name="fechaCierre"
-                type="date"
-                value={fechaCierre}
-                onChange={(e) => setFechaCierre(e.target.value)}
+              <label htmlFor="ed-empleado" className="label">Empleado</label>
+              <select
+                id="ed-empleado"
+                name="empleadoId"
+                value={empleadoId}
+                onChange={(e) => setEmpleadoId(Number(e.target.value))}
                 className="field"
                 required
-              />
-              {empleado?.horarioFin ? (
+              >
+                {empleados.map((e) => (
+                  <option key={e.id} value={e.id} disabled={e.enJornada !== null}>
+                    {e.nombre}
+                    {e.enJornada ? ` (en jornada en ${e.enJornada})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="ed-fecha" className="label">Fecha de inicio</label>
+              <input id="ed-fecha" name="fecha" type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="field" required />
+              {empleado?.horarioInicio ? (
                 <p className="mt-1 text-xs text-muted">
-                  Termina a las <b className="text-fg">{empleado.horarioFin}</b> según el horario de {empleado.nombre}.
+                  Empieza a las <b className="text-fg">{empleado.horarioInicio}</b> según el horario de {empleado.nombre}.
                 </p>
               ) : (
                 <div className="mt-2">
-                  <label htmlFor="ed-hora-cierre" className="label">Hora de cierre ({empleado?.nombre} no tiene horario)</label>
-                  <input
-                    id="ed-hora-cierre"
-                    name="horaCierre"
-                    type="time"
-                    value={horaCierre}
-                    onChange={(e) => setHoraCierre(e.target.value)}
-                    className="field"
-                    required
-                  />
+                  <label htmlFor="ed-hora" className="label">Hora de inicio ({empleado?.nombre} no tiene horario)</label>
+                  <input id="ed-hora" name="hora" type="time" value={hora} onChange={(e) => setHora(e.target.value)} className="field" required />
                 </div>
               )}
             </div>
-          )}
-        </div>
-      </section>
+            {cerrada && (
+              <div>
+                <label htmlFor="ed-fecha-cierre" className="label">Fecha de cierre</label>
+                <input
+                  id="ed-fecha-cierre"
+                  name="fechaCierre"
+                  type="date"
+                  value={fechaCierre}
+                  onChange={(e) => setFechaCierre(e.target.value)}
+                  className="field"
+                  required
+                />
+                {empleado?.horarioFin ? (
+                  <p className="mt-1 text-xs text-muted">
+                    Termina a las <b className="text-fg">{empleado.horarioFin}</b> según el horario de {empleado.nombre}.
+                  </p>
+                ) : (
+                  <div className="mt-2">
+                    <label htmlFor="ed-hora-cierre" className="label">Hora de cierre ({empleado?.nombre} no tiene horario)</label>
+                    <input
+                      id="ed-hora-cierre"
+                      name="horaCierre"
+                      type="time"
+                      value={horaCierre}
+                      onChange={(e) => setHoraCierre(e.target.value)}
+                      className="field"
+                      required
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       <section aria-labelledby="ed-lecturas" className="space-y-3">
         <h3 id="ed-lecturas" className="text-base font-semibold text-fg">Lecturas de contadores</h3>

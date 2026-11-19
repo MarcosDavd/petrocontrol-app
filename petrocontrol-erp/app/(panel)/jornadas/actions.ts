@@ -2,7 +2,9 @@
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { exigirAdmin, exigirUsuario, type UsuarioActual } from '@/lib/sesion';
+import { Prisma } from '@/generated/prisma';
+import { exigirUsuario, type UsuarioActual } from '@/lib/sesion';
+import { pagoSchema } from '@/lib/validation/pagos';
 import { MENSAJE_FECHA_EMPLEADO, fechaPermitidaParaEmpleado } from '@/lib/permisos';
 import { db } from '@/lib/db';
 import { ErrorNegocio } from '@/lib/errores';
@@ -18,14 +20,13 @@ import {
 export type EstadoFormulario = { error?: string };
 
 /**
- * Un empleado solo opera sobre sus propias jornadas abiertas; el admin, sobre cualquiera.
- * Devuelve el mensaje de error o null si puede seguir.
+ * Un empleado solo opera sobre sus propias jornadas (abiertas o cerradas: puede corregir sus errores);
+ * el admin, sobre cualquiera. Devuelve el mensaje de error o null si puede seguir.
  */
 async function verificarJornadaPropia(usuario: UsuarioActual, jornadaId: number): Promise<string | null> {
   if (usuario.rol === 'ADMIN') return null;
-  const jornada = await db.jornada.findUnique({ where: { id: jornadaId }, select: { empleadoId: true, estado: true } });
+  const jornada = await db.jornada.findUnique({ where: { id: jornadaId }, select: { empleadoId: true } });
   if (!jornada || jornada.empleadoId !== usuario.empleadoId) return 'La jornada no existe.';
-  if (jornada.estado !== 'ABIERTA') return 'La jornada ya está cerrada. Para corregirla, consulta con el administrador.';
   return null;
 }
 
@@ -117,11 +118,17 @@ export async function cerrarJornadaAction(_prev: EstadoFormulario, formData: For
 }
 
 export async function editarJornadaAction(_prev: EstadoFormulario, formData: FormData): Promise<EstadoFormulario> {
-  await exigirAdmin();
+  const usuario = await exigirUsuario();
 
   const parsed = editarJornadaSchema.safeParse(Object.fromEntries(formData.entries()));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Datos inválidos.' };
   const datos = parsed.data;
+
+  const denegado = await verificarJornadaPropia(usuario, datos.jornadaId);
+  if (denegado) return { error: denegado };
+  // El empleado corrige lecturas, totalizador y notas; la fecha y el empleado de la jornada
+  // solo los cambia el admin (se ignora lo que llegue en el formulario)
+  const esEmpleado = usuario.rol === 'EMPLEADO';
 
   const entradaAtras = camposPorProducto(formData, 'entradaAtras');
   const entradaAdelante = camposPorProducto(formData, 'entradaAdelante');
@@ -131,7 +138,8 @@ export async function editarJornadaAction(_prev: EstadoFormulario, formData: For
 
   try {
     await editarJornada(datos.jornadaId, {
-      empleadoId: datos.empleadoId,
+      empleadoId: esEmpleado ? usuario.empleadoId! : datos.empleadoId,
+      conservarFechas: esEmpleado,
       fecha: datos.fecha,
       horaManual: datos.hora || undefined,
       totalizadorEntrada: datos.totalizadorEntrada || undefined,
@@ -177,4 +185,35 @@ export async function eliminarPagoAction(formData: FormData) {
   await recalcularCaja(jornadaId);
   revalidarTodo();
   revalidatePath(`/jornadas/${jornadaId}`);
+}
+
+/** Agrega un pago a una jornada (por ejemplo, uno que se olvidó al cerrar) y recalcula la caja. */
+export async function agregarPagoAction(_prev: EstadoFormulario, formData: FormData): Promise<EstadoFormulario> {
+  const usuario = await exigirUsuario();
+  const jornadaId = Number(formData.get('jornadaId'));
+  if (!Number.isInteger(jornadaId) || jornadaId <= 0) return { error: 'Jornada inválida.' };
+
+  const denegado = await verificarJornadaPropia(usuario, jornadaId);
+  if (denegado) return { error: denegado };
+
+  const parsed = pagoSchema.safeParse(Object.fromEntries(formData.entries()));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Datos inválidos.' };
+  if (parsed.data.monto <= 0) return { error: 'El monto debe ser mayor a 0.' };
+
+  const existe = await db.jornada.findUnique({ where: { id: jornadaId }, select: { id: true } });
+  if (!existe) return { error: 'La jornada no existe.' };
+
+  await db.pagoJornada.create({
+    data: {
+      jornadaId,
+      medio: parsed.data.medio,
+      monto: new Prisma.Decimal(parsed.data.monto.toFixed(2)),
+      nota: parsed.data.nota || null,
+    },
+  });
+  await recalcularCaja(jornadaId);
+
+  revalidarTodo();
+  revalidatePath(`/jornadas/${jornadaId}`);
+  return {};
 }

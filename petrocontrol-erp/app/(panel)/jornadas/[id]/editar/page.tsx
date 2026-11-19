@@ -6,7 +6,7 @@ import { PageHeader } from '@/components/page-header';
 import { formatoFechaHora } from '@/lib/formato';
 import { partesLima } from '@/lib/zona-horaria';
 import { EditarJornadaForm } from './editar-jornada-form';
-import { exigirAdmin } from '@/lib/sesion';
+import { exigirUsuario } from '@/lib/sesion';
 
 export const metadata = { title: 'Editar jornada' };
 
@@ -14,7 +14,8 @@ export const metadata = { title: 'Editar jornada' };
 const texto = (valor: { toString(): string } | null) => (valor === null ? '' : valor.toString());
 
 export default async function EditarJornadaPage({ params }: { params: Promise<{ id: string }> }) {
-  await exigirAdmin();
+  const usuario = await exigirUsuario();
+  const esEmpleado = usuario.rol === 'EMPLEADO';
   const { id } = await params;
   const jornadaId = Number(id);
   if (!Number.isInteger(jornadaId) || jornadaId <= 0) notFound();
@@ -28,7 +29,8 @@ export default async function EditarJornadaPage({ params }: { params: Promise<{ 
       lecturas: { include: { combustible: true }, orderBy: { combustibleId: 'asc' } },
     },
   });
-  if (!jornada) notFound();
+  // Un empleado solo corrige sus propias jornadas
+  if (!jornada || (esEmpleado && jornada.empleadoId !== usuario.empleadoId)) notFound();
 
   // Empleados de la estación: los activos y el actual (aunque ya esté inactivo)
   const [empleados, otrasAbiertas] = await Promise.all([
@@ -63,6 +65,7 @@ export default async function EditarJornadaPage({ params }: { params: Promise<{ 
         <EditarJornadaForm
           jornadaId={jornada.id}
           cerrada={cerrada}
+          soloLecturas={esEmpleado}
           empleados={empleados.map((e) => ({
             ...e,
             enJornada: otrasAbiertas.find((j) => j.empleadoId === e.id)?.maquina.nombre ?? null,
