@@ -5,8 +5,12 @@ import { combustibleSchema } from '@/lib/validation/maestros';
 import { leerPreciosNuevoProducto } from '@/lib/precios';
 import { fechaHoraLima, hoyLima } from '@/lib/zona-horaria';
 import { Prisma } from '@/generated/prisma';
+import { exigirAdminApi } from '@/lib/sesion';
 
 export async function GET() {
+  const denegado = await exigirAdminApi();
+  if (denegado) return denegado;
+
   const combustibles = await db.combustible.findMany({
     orderBy: { nombre: 'asc' },
     include: {
@@ -21,6 +25,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const denegado = await exigirAdminApi();
+  if (denegado) return denegado;
+
   try {
     const contentType = request.headers.get('content-type') ?? '';
     const rawData = contentType.includes('application/json')

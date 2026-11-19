@@ -1,8 +1,11 @@
-import { Pencil, UserPlus, UsersRound } from 'lucide-react';
+import { KeyRound, Pencil, UserPlus, UsersRound } from 'lucide-react';
 import { db } from '@/lib/db';
 import { EmptyState, PageHeader } from '@/components/page-header';
 import { SelectorHorario } from '@/components/selector-horario';
 import { describirHorario } from '@/lib/turnos';
+import { AccesoEmpleado } from './acceso-empleado';
+import { NuevoEmpleadoForm } from './nuevo-empleado-form';
+import { exigirAdmin } from '@/lib/sesion';
 
 export const metadata = { title: 'Empleados' };
 
@@ -31,10 +34,14 @@ function CasillaActivo({ marcada = true }: { marcada?: boolean }) {
 }
 
 export default async function EmpleadosPage() {
+  await exigirAdmin();
   const [estaciones, empleados] = await Promise.all([
     db.estacion.findMany({ orderBy: { nombre: 'asc' } }),
     db.empleado.findMany({
-      include: { jornadas: { where: { estado: 'ABIERTA' }, select: { id: true }, take: 1 } },
+      include: {
+        jornadas: { where: { estado: 'ABIERTA' }, select: { id: true }, take: 1 },
+        usuario: { select: { usuario: true } },
+      },
       orderBy: [{ activo: 'desc' }, { nombre: 'asc' }],
     }),
   ]);
@@ -45,23 +52,15 @@ export default async function EmpleadosPage() {
     <div className="space-y-6">
       <PageHeader
         title="Empleados"
-        description="Personal de cada estación y su horario de trabajo (define la hora de inicio y fin de sus jornadas)."
+        description="Personal de cada estación, su horario de trabajo y su acceso a la app (cada empleado solo abre y cierra sus jornadas)."
       />
 
       <section className="grid items-start gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
         <div className="card xl:sticky xl:top-8">
-          <h2 className="card-title"><UserPlus className="h-5 w-5 text-primary" aria-hidden />Nuevo empleado</h2>
-          <form action="/api/empleados" method="post" className="space-y-3">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <input name="nombre" placeholder="Nombre del empleado" aria-label="Nombre del empleado" className="field" required />
-              <SelectEstacion estaciones={estaciones} />
-              <SelectorHorario />
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <CasillaActivo />
-              <button type="submit" className="btn-primary w-full sm:w-auto">Guardar empleado</button>
-            </div>
-          </form>
+          <h2 className="card-title"><UserPlus className="h-5 w-5 text-primary" aria-hidden />Registrar empleado</h2>
+          <NuevoEmpleadoForm
+            estaciones={estaciones.filter((e) => e.activa).map(({ id, nombre }) => ({ id, nombre }))}
+          />
         </div>
 
         <div className="card">
@@ -95,12 +94,18 @@ export default async function EmpleadosPage() {
                               <div className="flex flex-wrap items-center justify-between gap-2">
                                 <div className="min-w-0">
                                   <p className="truncate font-semibold">{empleado.nombre}</p>
+                                  <p className="text-xs text-muted tabular-nums">
+                                    {empleado.dni ? `DNI ${empleado.dni}` : 'Sin DNI registrado'}
+                                  </p>
                                   <p className={`text-xs ${faltaHorario ? 'font-medium text-warning' : 'text-muted'}`}>
                                     {describirHorario(empleado.horarioInicio, empleado.horarioFin)}
                                   </p>
                                 </div>
                                 <div className="flex flex-wrap gap-1">
                                   {enJornada && <span className="badge-warning">En jornada</span>}
+                                  <span className={empleado.usuario ? 'badge-success' : 'badge-neutral'}>
+                                    {empleado.usuario ? 'Con acceso' : 'Sin acceso'}
+                                  </span>
                                   <span className={empleado.activo ? 'badge-success' : 'badge-neutral'}>
                                     {empleado.activo ? 'Activo' : 'Inactivo'}
                                   </span>
@@ -120,6 +125,18 @@ export default async function EmpleadosPage() {
                                       className="field"
                                       required
                                     />
+                                    <input
+                                      name="dni"
+                                      defaultValue={empleado.dni ?? ''}
+                                      aria-label="DNI"
+                                      placeholder="DNI (8 dígitos)"
+                                      inputMode="numeric"
+                                      pattern="\d{8}"
+                                      title="8 dígitos"
+                                      maxLength={8}
+                                      className="field tabular-nums"
+                                      required={empleado.dni !== null}
+                                    />
                                     <SelectEstacion estaciones={estaciones} valor={empleado.estacionId} />
                                     <SelectorHorario inicio={empleado.horarioInicio ?? ''} fin={empleado.horarioFin ?? ''} />
                                   </div>
@@ -133,6 +150,19 @@ export default async function EmpleadosPage() {
                                     <button type="submit" className="btn-ghost px-3 py-1.5 text-xs">Guardar cambios</button>
                                   </div>
                                 </form>
+                              </details>
+
+                              <details className="mt-2">
+                                <summary className="inline-flex cursor-pointer items-center gap-1 text-xs font-medium text-primary">
+                                  <KeyRound className="h-3.5 w-3.5" aria-hidden /> Acceso a la app
+                                </summary>
+                                <AccesoEmpleado
+                                  empleadoId={empleado.id}
+                                  nombre={empleado.nombre}
+                                  dni={empleado.dni}
+                                  usuario={empleado.usuario?.usuario ?? null}
+                                  activo={empleado.activo}
+                                />
                               </details>
                             </li>
                           );

@@ -5,14 +5,20 @@ import { EmptyState, PageHeader } from '@/components/page-header';
 import { AlertasJornada, tieneAlertas } from '@/components/alertas-jornada';
 import { formatoFechaHora, formatoGalones, formatoSoles } from '@/lib/formato';
 import { obtenerLecturasPrevias } from '@/lib/jornadas-servicio';
+import { exigirUsuario, type UsuarioActual } from '@/lib/sesion';
+import { rangoFechaEmpleado } from '@/lib/permisos';
 import { AbrirJornadaForm, type MaquinaOpcion } from './abrir-jornada-form';
 
 export const metadata = { title: 'Jornadas' };
 
-async function getDatos() {
+/** El admin ve todo; un empleado, solo las máquinas de su estación y sus propias jornadas. */
+async function getDatos(usuario: UsuarioActual) {
+  const empleado = usuario.rol === 'EMPLEADO' ? usuario.empleado : null;
+  const soloEmpleado = empleado ? { empleadoId: empleado.id } : {};
+
   const [maquinas, empleados, abiertas, cerradas] = await Promise.all([
     db.maquina.findMany({
-      where: { activa: true, estacion: { activa: true } },
+      where: { activa: true, estacion: { activa: true }, ...(empleado ? { estacionId: empleado.estacionId } : {}) },
       include: {
         estacion: true,
         productos: { include: { combustible: true }, orderBy: { combustibleId: 'asc' } },
@@ -20,14 +26,14 @@ async function getDatos() {
       },
       orderBy: [{ estacionId: 'asc' }, { nombre: 'asc' }],
     }),
-    db.empleado.findMany({ where: { activo: true }, orderBy: { nombre: 'asc' } }),
+    db.empleado.findMany({ where: { activo: true, ...(empleado ? { id: empleado.id } : {}) }, orderBy: { nombre: 'asc' } }),
     db.jornada.findMany({
-      where: { estado: 'ABIERTA' },
+      where: { estado: 'ABIERTA', ...soloEmpleado },
       include: { empleado: true, maquina: true, estacion: true },
       orderBy: { inicio: 'desc' },
     }),
     db.jornada.findMany({
-      where: { estado: 'CERRADA' },
+      where: { estado: 'CERRADA', ...soloEmpleado },
       include: { empleado: true, maquina: true, estacion: true, lecturas: { include: { combustible: true } } },
       orderBy: { inicio: 'desc' },
       take: 30,
@@ -69,25 +75,45 @@ async function getDatos() {
 }
 
 export default async function JornadasPage() {
-  const { maquinas, empleados, abiertas, cerradas } = await getDatos();
+  const usuario = await exigirUsuario();
+  const esEmpleado = usuario.rol === 'EMPLEADO';
+  const { maquinas, empleados, abiertas, cerradas } = await getDatos(usuario);
+  // Un empleado no puede tener dos jornadas abiertas: con una en curso, solo le queda cerrarla
+  const puedeAbrir = !esEmpleado || abiertas.length === 0;
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Jornadas"
-        description="Registra cómo recibe y cómo deja cada empleado los contadores de su máquina."
+        title={esEmpleado ? 'Mis jornadas' : 'Jornadas'}
+        description={
+          esEmpleado
+            ? 'Registra cómo recibes y cómo dejas los contadores de tu máquina.'
+            : 'Registra cómo recibe y cómo deja cada empleado los contadores de su máquina.'
+        }
       />
 
       <section className="grid items-start gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <div className="card">
-          <h2 className="card-title"><PlayCircle className="h-5 w-5 text-primary" aria-hidden />Abrir jornada</h2>
-          <AbrirJornadaForm maquinas={maquinas} empleados={empleados} />
-        </div>
+        {puedeAbrir ? (
+          <div className="card">
+            <h2 className="card-title"><PlayCircle className="h-5 w-5 text-primary" aria-hidden />Abrir jornada</h2>
+            <AbrirJornadaForm
+              maquinas={maquinas}
+              empleados={empleados}
+              empleadoFijo={esEmpleado}
+              rangoFecha={esEmpleado ? rangoFechaEmpleado() : undefined}
+            />
+          </div>
+        ) : (
+          <div className="card">
+            <h2 className="card-title"><PlayCircle className="h-5 w-5 text-primary" aria-hidden />Abrir jornada</h2>
+            <EmptyState>Tienes una jornada en curso. Ciérrala para poder abrir otra.</EmptyState>
+          </div>
+        )}
 
         <div className="card">
-          <h2 className="card-title"><Timer className="h-5 w-5 text-primary" aria-hidden />Jornadas abiertas</h2>
+          <h2 className="card-title"><Timer className="h-5 w-5 text-primary" aria-hidden />{esEmpleado ? 'Jornada en curso' : 'Jornadas abiertas'}</h2>
           {abiertas.length === 0 ? (
-            <EmptyState>No hay jornadas abiertas.</EmptyState>
+            <EmptyState>{esEmpleado ? 'No tienes una jornada abierta.' : 'No hay jornadas abiertas.'}</EmptyState>
           ) : (
             <ul className="space-y-2">
               {abiertas.map((jornada) => (

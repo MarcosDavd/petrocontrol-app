@@ -1,12 +1,16 @@
 import { db } from '@/lib/db';
 import { fechaParaArchivo, rangoFechas } from '@/lib/rango-fechas';
 import { csvReporteJornadas } from '@/lib/reporte-jornadas';
+import { exigirAdminApi } from '@/lib/sesion';
 
 /**
  * GET /api/reportes/jornadas?desde=YYYY-MM-DD&hasta=YYYY-MM-DD
  * Descarga en CSV las jornadas cerradas cuyo inicio está en el rango (ambos días incluidos).
  */
 export async function GET(request: Request) {
+  const denegado = await exigirAdminApi();
+  if (denegado) return denegado;
+
   const { searchParams } = new URL(request.url);
   const { desde, hasta, inicio, fin } = rangoFechas(searchParams.get('desde'), searchParams.get('hasta'));
 

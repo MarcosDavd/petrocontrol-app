@@ -58,6 +58,7 @@ export function CerrarJornadaForm({
   empleado,
   horarioFin,
   fechaSugerida,
+  rangoFecha,
 }: {
   jornadaId: number;
   lecturas: LecturaAbierta[];
@@ -71,6 +72,8 @@ export function CerrarJornadaForm({
   /** Hora de fin del horario del empleado (null si no tiene) */
   horarioFin: string | null;
   fechaSugerida: string;
+  /** Fechas que puede elegir (el empleado: hoy o ayer). Sin rango, cualquiera. */
+  rangoFecha?: { min: string; max: string };
 }) {
   const [estado, formAction, pending] = useActionState<EstadoFormulario, FormData>(cerrarJornadaAction, {});
   const [valores, setValores] = useState<Record<number, Valores>>(() =>
@@ -196,6 +199,8 @@ export function CerrarJornadaForm({
               type="date"
               value={fecha}
               onChange={(e) => setFecha(e.target.value)}
+              min={rangoFecha?.min}
+              max={rangoFecha?.max}
               className="field"
               required
             />

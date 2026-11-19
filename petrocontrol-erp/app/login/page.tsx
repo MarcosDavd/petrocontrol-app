@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
+  const [identificador, setIdentificador] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
@@ -23,16 +23,16 @@ export default function LoginPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ identificador, password }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Correo o contraseña incorrectos. Revisa los datos e inténtalo de nuevo.');
+        throw new Error(data.error || 'Usuario o contraseña incorrectos. Revisa los datos e inténtalo de nuevo.');
       }
 
-      router.push('/home');
+      router.push(typeof data.destino === 'string' && data.destino.startsWith('/') ? data.destino : '/home');
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo conectar con el servidor. Inténtalo de nuevo.');
@@ -68,20 +68,20 @@ export default function LoginPage() {
 
           <form className="mt-5 space-y-5" onSubmit={handleSubmit}>
             <div>
-              <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-fg">
-                Correo electrónico
+              <label htmlFor="identificador" className="mb-1.5 block text-sm font-medium text-fg">
+                Correo o DNI
               </label>
               <input
-                id="email"
-                type="email"
-                inputMode="email"
-                autoComplete="email"
+                id="identificador"
+                type="text"
+                autoComplete="username"
                 autoCapitalize="none"
+                autoCorrect="off"
                 spellCheck={false}
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                value={identificador}
+                onChange={(event) => setIdentificador(event.target.value)}
                 className="field py-3"
-                placeholder="tu@correo.com"
+                placeholder="Correo o DNI"
                 aria-invalid={error ? true : undefined}
                 required
               />

@@ -4,12 +4,13 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 import { LogOut, Menu, X } from 'lucide-react';
-import { NAV_GROUPS, NAV_ITEMS } from './nav-items';
+import { NAV_ITEMS, navegacionPara, type NavGroup } from './nav-items';
+import { inicioDe, type Rol } from '@/lib/permisos';
 import { AvisoError } from './aviso-error';
 
-function BrandMark({ compact = false }: { compact?: boolean }) {
+function BrandMark({ compact = false, href }: { compact?: boolean; href: string }) {
   return (
-    <Link href="/home" className="flex items-center gap-3">
+    <Link href={href} className="flex items-center gap-3">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/brand/isotipo-blanco.svg" alt="" className={compact ? 'h-8 w-auto' : 'h-10 w-auto'} />
       <span className="leading-tight">
@@ -20,10 +21,10 @@ function BrandMark({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function NavLinks({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
+function NavLinks({ grupos, pathname, onNavigate }: { grupos: NavGroup[]; pathname: string; onNavigate?: () => void }) {
   return (
     <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-4" aria-label="Principal">
-      {NAV_GROUPS.map((group) => (
+      {grupos.map((group) => (
         <div key={group.title}>
           <p className="px-3 pb-1.5 text-xs font-medium text-sidebar-muted">
             {group.title}
@@ -59,7 +60,7 @@ function NavLinks({ pathname, onNavigate }: { pathname: string; onNavigate?: () 
   );
 }
 
-function UserFooter({ email, onNavigate }: { email: string; onNavigate?: () => void }) {
+function UserFooter({ nombre, detalle, onNavigate }: { nombre: string; detalle: string; onNavigate?: () => void }) {
   return (
     <div className="border-t border-white/10 p-3">
       <Link
@@ -69,11 +70,11 @@ function UserFooter({ email, onNavigate }: { email: string; onNavigate?: () => v
         className="flex items-center gap-3 rounded-lg px-3 py-2 transition hover:bg-sidebar-hover"
       >
         <span className="flex h-9 w-9 shrink-0 items-center justify-center bg-gl-amarillo text-sm font-bold uppercase text-gl-grafito">
-          {email.charAt(0)}
+          {nombre.charAt(0)}
         </span>
         <span className="min-w-0 flex-1 leading-tight">
-          <span className="block truncate text-sm text-sidebar-text">{email}</span>
-          <span className="block text-xs text-sidebar-muted">Mi cuenta</span>
+          <span className="block truncate text-sm text-sidebar-text">{nombre}</span>
+          <span className="block truncate text-xs text-sidebar-muted">{detalle} · Mi cuenta</span>
         </span>
       </Link>
       <form action="/api/auth/logout" method="POST">
@@ -100,8 +101,23 @@ function BrandStripe({ className = 'h-1' }: { className?: string }) {
   );
 }
 
-export function AppShell({ email, children }: { email: string; children: React.ReactNode }) {
+export function AppShell({
+  nombre,
+  detalle,
+  rol,
+  cambioPendiente,
+  children,
+}: {
+  nombre: string;
+  detalle: string;
+  rol: Rol;
+  /** Contraseña temporal sin cambiar: el menú se oculta hasta que la cambie. */
+  cambioPendiente: boolean;
+  children: React.ReactNode;
+}) {
   const pathname = usePathname();
+  const grupos = cambioPendiente ? [] : navegacionPara(rol);
+  const inicio = cambioPendiente ? '/cuenta' : inicioDe(rol);
   const [open, setOpen] = useState(false);
   const current = NAV_ITEMS.find((item) => pathname === item.href || pathname.startsWith(`${item.href}/`));
 
@@ -123,16 +139,16 @@ export function AppShell({ email, children }: { email: string; children: React.R
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-sidebar lg:flex">
         <BrandStripe className="h-1.5" />
         <div className="px-6 py-5">
-          <BrandMark />
+          <BrandMark href={inicio} />
         </div>
-        <NavLinks pathname={pathname} />
-        <UserFooter email={email} />
+        <NavLinks grupos={grupos} pathname={pathname} />
+        <UserFooter nombre={nombre} detalle={detalle} />
       </aside>
 
       {/* Barra superior (móvil / tablet) */}
       <header className="sticky top-0 z-30 bg-sidebar pt-[env(safe-area-inset-top)] lg:hidden">
         <div className="flex h-14 items-center justify-between gap-3 px-4">
-          <BrandMark compact />
+          <BrandMark compact href={inicio} />
           {current && (
             <span className="truncate text-sm font-medium text-sidebar-muted sm:hidden">{current.label}</span>
           )}
@@ -166,7 +182,7 @@ export function AppShell({ email, children }: { email: string; children: React.R
       >
         <BrandStripe />
         <div className="flex items-center justify-between px-5 py-4">
-          <BrandMark />
+          <BrandMark href={inicio} />
           <button
             type="button"
             onClick={() => setOpen(false)}
@@ -176,8 +192,8 @@ export function AppShell({ email, children }: { email: string; children: React.R
             <X className="h-5 w-5" aria-hidden />
           </button>
         </div>
-        <NavLinks pathname={pathname} onNavigate={() => setOpen(false)} />
-        <UserFooter email={email} onNavigate={() => setOpen(false)} />
+        <NavLinks grupos={grupos} pathname={pathname} onNavigate={() => setOpen(false)} />
+        <UserFooter nombre={nombre} detalle={detalle} onNavigate={() => setOpen(false)} />
       </aside>
 
       <main className="mx-auto w-full max-w-7xl px-4 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-8 lg:px-8">

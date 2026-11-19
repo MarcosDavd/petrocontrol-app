@@ -2,7 +2,8 @@
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { getSessionFromCookies } from '@/lib/auth';
+import { exigirAdmin, exigirUsuario, type UsuarioActual } from '@/lib/sesion';
+import { MENSAJE_FECHA_EMPLEADO, fechaPermitidaParaEmpleado } from '@/lib/permisos';
 import { db } from '@/lib/db';
 import { ErrorNegocio } from '@/lib/errores';
 import { abrirJornada, cerrarJornada, editarJornada, recalcularCaja } from '@/lib/jornadas-servicio';
@@ -16,9 +17,16 @@ import {
 
 export type EstadoFormulario = { error?: string };
 
-async function exigirSesion() {
-  const session = await getSessionFromCookies();
-  if (!session) redirect('/login');
+/**
+ * Un empleado solo opera sobre sus propias jornadas abiertas; el admin, sobre cualquiera.
+ * Devuelve el mensaje de error o null si puede seguir.
+ */
+async function verificarJornadaPropia(usuario: UsuarioActual, jornadaId: number): Promise<string | null> {
+  if (usuario.rol === 'ADMIN') return null;
+  const jornada = await db.jornada.findUnique({ where: { id: jornadaId }, select: { empleadoId: true, estado: true } });
+  if (!jornada || jornada.empleadoId !== usuario.empleadoId) return 'La jornada no existe.';
+  if (jornada.estado !== 'ABIERTA') return 'La jornada ya está cerrada. Para corregirla, consulta con el administrador.';
+  return null;
 }
 
 function mensajeDeError(error: unknown, contexto: string): EstadoFormulario {
@@ -32,10 +40,13 @@ function revalidarTodo() {
 }
 
 export async function abrirJornadaAction(_prev: EstadoFormulario, formData: FormData): Promise<EstadoFormulario> {
-  await exigirSesion();
+  const usuario = await exigirUsuario();
 
   const parsed = abrirJornadaSchema.safeParse(Object.fromEntries(formData.entries()));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Datos inválidos.' };
+  if (usuario.rol === 'EMPLEADO' && !fechaPermitidaParaEmpleado(parsed.data.fecha)) {
+    return { error: MENSAJE_FECHA_EMPLEADO };
+  }
 
   const atras = camposPorProducto(formData, 'entradaAtras');
   const adelante = camposPorProducto(formData, 'entradaAdelante');
@@ -44,7 +55,8 @@ export async function abrirJornadaAction(_prev: EstadoFormulario, formData: Form
   try {
     const jornada = await abrirJornada({
       maquinaId: parsed.data.maquinaId,
-      empleadoId: parsed.data.empleadoId,
+      // Un empleado siempre abre su propia jornada, diga lo que diga el formulario
+      empleadoId: usuario.rol === 'EMPLEADO' ? usuario.empleadoId! : parsed.data.empleadoId,
       fecha: parsed.data.fecha,
       horaManual: parsed.data.hora || undefined,
       totalizadorEntrada: parsed.data.totalizadorEntrada || undefined,
@@ -65,10 +77,16 @@ export async function abrirJornadaAction(_prev: EstadoFormulario, formData: Form
 }
 
 export async function cerrarJornadaAction(_prev: EstadoFormulario, formData: FormData): Promise<EstadoFormulario> {
-  await exigirSesion();
+  const usuario = await exigirUsuario();
 
   const parsed = cerrarJornadaSchema.safeParse(Object.fromEntries(formData.entries()));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Datos inválidos.' };
+
+  const denegado = await verificarJornadaPropia(usuario, parsed.data.jornadaId);
+  if (denegado) return { error: denegado };
+  if (usuario.rol === 'EMPLEADO' && !fechaPermitidaParaEmpleado(parsed.data.fecha)) {
+    return { error: MENSAJE_FECHA_EMPLEADO };
+  }
 
   const atras = camposPorProducto(formData, 'salidaAtras');
   const adelante = camposPorProducto(formData, 'salidaAdelante');
@@ -99,7 +117,7 @@ export async function cerrarJornadaAction(_prev: EstadoFormulario, formData: For
 }
 
 export async function editarJornadaAction(_prev: EstadoFormulario, formData: FormData): Promise<EstadoFormulario> {
-  await exigirSesion();
+  await exigirAdmin();
 
   const parsed = editarJornadaSchema.safeParse(Object.fromEntries(formData.entries()));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Datos inválidos.' };
@@ -148,10 +166,12 @@ export async function editarJornadaAction(_prev: EstadoFormulario, formData: For
 }
 
 export async function eliminarPagoAction(formData: FormData) {
-  await exigirSesion();
+  const usuario = await exigirUsuario();
   const pagoId = Number(formData.get('pagoId'));
   const jornadaId = Number(formData.get('jornadaId'));
   if (!Number.isInteger(pagoId) || !Number.isInteger(jornadaId)) return;
+  // El empleado puede quitar pagos de su jornada abierta; en una cerrada solo corrige el admin
+  if (await verificarJornadaPropia(usuario, jornadaId)) return;
 
   await db.pagoJornada.deleteMany({ where: { id: pagoId, jornadaId } });
   await recalcularCaja(jornadaId);

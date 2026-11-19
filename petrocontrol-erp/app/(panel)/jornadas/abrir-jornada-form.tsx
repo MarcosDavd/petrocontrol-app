@@ -85,12 +85,24 @@ function FilaProducto({ producto }: { producto: MaquinaOpcion['productos'][numbe
   );
 }
 
-export function AbrirJornadaForm({ maquinas, empleados }: { maquinas: MaquinaOpcion[]; empleados: EmpleadoOpcion[] }) {
+export function AbrirJornadaForm({
+  maquinas,
+  empleados,
+  empleadoFijo = false,
+  rangoFecha,
+}: {
+  maquinas: MaquinaOpcion[];
+  empleados: EmpleadoOpcion[];
+  /** Vista del empleado: la jornada siempre es suya (`empleados` trae solo a él). */
+  empleadoFijo?: boolean;
+  /** Fechas que puede elegir (el empleado: hoy o ayer). Sin rango, cualquiera. */
+  rangoFecha?: { min: string; max: string };
+}) {
   const [estado, formAction, pending] = useActionState<EstadoFormulario, FormData>(abrirJornadaAction, {});
   const [maquinaId, setMaquinaId] = useState('');
   // Campos controlados: React reinicia los no controlados al terminar la acción,
   // y así no se pierde lo escrito si el servidor devuelve un error.
-  const [empleadoId, setEmpleadoId] = useState('');
+  const [empleadoId, setEmpleadoId] = useState(() => (empleadoFijo && empleados[0] ? String(empleados[0].id) : ''));
   const [fecha, setFecha] = useState(() => hoyLima());
   const [horaManual, setHoraManual] = useState('');
   const [totalizador, setTotalizador] = useState('');
@@ -119,7 +131,7 @@ export function AbrirJornadaForm({ maquinas, empleados }: { maquinas: MaquinaOpc
             value={maquinaId}
             onChange={(e) => {
               setMaquinaId(e.target.value);
-              setEmpleadoId('');
+              if (!empleadoFijo) setEmpleadoId('');
             }}
             required
           >
@@ -138,30 +150,38 @@ export function AbrirJornadaForm({ maquinas, empleados }: { maquinas: MaquinaOpc
             ))}
           </select>
         </div>
-        <div>
-          <label htmlFor="empleadoId" className="label">Empleado</label>
-          <select
-            id="empleadoId"
-            name="empleadoId"
-            className="field"
-            value={empleadoId}
-            onChange={(e) => setEmpleadoId(e.target.value)}
-            required
-            disabled={!maquina}
-          >
-            <option value="">{maquina ? 'Selecciona empleado' : 'Primero elige la máquina'}</option>
-            {empleadosEstacion.map((empleado) => (
-              <option key={empleado.id} value={empleado.id} disabled={empleado.enJornada !== null}>
-                {empleado.nombre}
-                {empleado.enJornada
-                  ? ` (en jornada en ${empleado.enJornada})`
-                  : empleado.horarioInicio
-                    ? ` (${empleado.horarioInicio} – ${empleado.horarioFin ?? '—'})`
-                    : ''}
-              </option>
-            ))}
-          </select>
-        </div>
+        {empleadoFijo ? (
+          <div>
+            <p className="label">Empleado</p>
+            <p className="field bg-surface-alt/60">{empleados[0]?.nombre ?? '—'}</p>
+            <input type="hidden" name="empleadoId" value={empleadoId} />
+          </div>
+        ) : (
+          <div>
+            <label htmlFor="empleadoId" className="label">Empleado</label>
+            <select
+              id="empleadoId"
+              name="empleadoId"
+              className="field"
+              value={empleadoId}
+              onChange={(e) => setEmpleadoId(e.target.value)}
+              required
+              disabled={!maquina}
+            >
+              <option value="">{maquina ? 'Selecciona empleado' : 'Primero elige la máquina'}</option>
+              {empleadosEstacion.map((empleado) => (
+                <option key={empleado.id} value={empleado.id} disabled={empleado.enJornada !== null}>
+                  {empleado.nombre}
+                  {empleado.enJornada
+                    ? ` (en jornada en ${empleado.enJornada})`
+                    : empleado.horarioInicio
+                      ? ` (${empleado.horarioInicio} – ${empleado.horarioFin ?? '—'})`
+                      : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div>
           <label htmlFor="fecha" className="label">Fecha de la jornada</label>
           <input
@@ -170,6 +190,8 @@ export function AbrirJornadaForm({ maquinas, empleados }: { maquinas: MaquinaOpc
             type="date"
             value={fecha}
             onChange={(e) => setFecha(e.target.value)}
+            min={rangoFecha?.min}
+            max={rangoFecha?.max}
             className="field"
             required
             // La fecha por defecto se calcula en el navegador y puede diferir del render del servidor

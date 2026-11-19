@@ -16,7 +16,7 @@ async function main() {
   // Credenciales del dueño: en producción vienen de ADMIN_EMAIL / ADMIN_PASSWORD.
   // La contraseña de desarrollo solo se permite contra una base de datos local.
   const esLocal = /@(localhost|127\.0\.0\.1)[:/]/.test(process.env.DATABASE_URL ?? '');
-  const email = process.env.ADMIN_EMAIL ?? 'dueno@petrocontrol.pe';
+  const email = (process.env.ADMIN_EMAIL ?? 'dueno@petrocontrol.pe').trim().toLowerCase();
   const password = process.env.ADMIN_PASSWORD ?? (esLocal ? 'Admin123!' : '');
   if (password.length < 10 && !esLocal) {
     throw new Error('Define ADMIN_PASSWORD (mínimo 10 caracteres) para crear el usuario en una base de datos remota.');
@@ -29,6 +29,7 @@ async function main() {
         nombre: 'Dueño',
         apellido: 'Grifos Lim',
         email,
+        rol: 'ADMIN',
         password: await bcrypt.hash(password, 10),
       },
     });

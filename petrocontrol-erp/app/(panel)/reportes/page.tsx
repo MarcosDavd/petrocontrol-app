@@ -7,6 +7,7 @@ import { EmptyState, PageHeader } from '@/components/page-header';
 import { AlertasJornada, tieneAlertas } from '@/components/alertas-jornada';
 import { formatoFechaHora, formatoGalones, formatoSoles } from '@/lib/formato';
 import { rangoFechas } from '@/lib/rango-fechas';
+import { exigirAdmin } from '@/lib/sesion';
 
 export const metadata = { title: 'Reportes' };
 
@@ -54,6 +55,7 @@ export default async function ReportesPage({
 }: {
   searchParams: Promise<{ desde?: string; hasta?: string }>;
 }) {
+  await exigirAdmin();
   const params = await searchParams;
   const { desde, hasta, inicio, fin } = rangoFechas(params.desde, params.hasta);
 

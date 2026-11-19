@@ -7,6 +7,7 @@ import { formatoFecha, formatoGalones } from '@/lib/formato';
 import { paginar } from '@/lib/paginacion';
 import { obtenerResumenTanques } from '@/lib/tanques-servicio';
 import { hoyLima } from '@/lib/zona-horaria';
+import { exigirAdmin } from '@/lib/sesion';
 
 export const metadata = { title: 'Inventario' };
 
@@ -51,6 +52,7 @@ export default async function InventarioPage({
 }: {
   searchParams: Promise<{ estacion?: string; pagina?: string }>;
 }) {
+  await exigirAdmin();
   const params = await searchParams;
   const { estaciones, tanques, movimientos, totalMovimientos, paginacion } = await getInventario(params.pagina);
   const hoy = hoyLima();

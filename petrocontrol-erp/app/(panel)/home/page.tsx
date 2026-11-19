@@ -1,12 +1,12 @@
 import Link from 'next/link';
 import { ChevronRight, Clock, Droplets, Fuel, Scale } from 'lucide-react';
 import { db } from '@/lib/db';
-import { getSessionFromCookies } from '@/lib/auth';
 import { PageHeader } from '@/components/page-header';
 import { COLOR_TEXTO_NIVEL, Torta } from '@/components/torta-tanque';
 import { necesitaAtencion, obtenerResumenTanques } from '@/lib/tanques-servicio';
 import { formatoGalones, formatoSoles } from '@/lib/formato';
 import { inicioMesLima } from '@/lib/zona-horaria';
+import { exigirAdmin, nombreVisible } from '@/lib/sesion';
 
 export const metadata = { title: 'Inicio' };
 
@@ -41,7 +41,8 @@ async function getResumen() {
 }
 
 export default async function HomePage() {
-  const [session, resumen] = await Promise.all([getSessionFromCookies(), getResumen()]);
+  const usuario = await exigirAdmin();
+  const resumen = await getResumen();
 
   const hayFaltante = resumen.diferenciaCajaMes > 0.004;
   const haySobrante = resumen.diferenciaCajaMes < -0.004;
@@ -76,7 +77,7 @@ export default async function HomePage() {
 
   return (
     <>
-      <PageHeader title="Inicio" description={session ? `Hola, ${session.email}` : undefined} />
+      <PageHeader title="Inicio" description={`Hola, ${nombreVisible(usuario)}`} />
 
       {/* Lecturas del mes: cards sin borde, el fondo tintado las separa de la página */}
       <section aria-label="Resumen del mes" className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">

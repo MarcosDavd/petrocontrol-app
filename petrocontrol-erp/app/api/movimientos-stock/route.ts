@@ -4,8 +4,12 @@ import { movimientoStockSchema } from '@/lib/validation/inventario';
 import { NextResponse } from 'next/server';
 import { responderError } from '@/lib/respuesta-formulario';
 import { fechaHoraLima } from '@/lib/zona-horaria';
+import { exigirAdminApi } from '@/lib/sesion';
 
 export async function GET() {
+  const denegado = await exigirAdminApi();
+  if (denegado) return denegado;
+
   const movimientos = await db.movimientoStock.findMany({
     include: {
       tanque: {
@@ -23,6 +27,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const denegado = await exigirAdminApi();
+  if (denegado) return denegado;
+
   try {
     const contentType = request.headers.get('content-type') ?? '';
     const rawData = contentType.includes('application/json')

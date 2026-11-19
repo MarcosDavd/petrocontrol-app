@@ -1,7 +1,11 @@
 import { db } from '@/lib/db';
 import { NextResponse } from 'next/server';
+import { exigirAdminApi } from '@/lib/sesion';
 
 export async function GET() {
+  const denegado = await exigirAdminApi();
+  if (denegado) return denegado;
+
   const jornadas = await db.jornada.findMany({
     include: {
       empleado: true,

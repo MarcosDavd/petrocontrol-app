@@ -12,21 +12,51 @@ datasource db {
 
 // ============================================================
 // PetroControl - Modelo de datos (Prisma + PostgreSQL)
-// Un solo usuario (el dueño). Unidad de medida: GALONES. Moneda: soles (PEN).
+// Un administrador (el dueño) y cuentas de empleado. Unidad de medida: GALONES. Moneda: soles (PEN).
 // ============================================================
 // ------------------------------------------------------------
 // ACCESO
 // ------------------------------------------------------------
 
-// Solo el dueño. Guardar `password` siempre hasheada (bcrypt/argon2).
+enum Rol {
+  ADMIN // el dueño: acceso completo
+  EMPLEADO // solo abre y cierra sus propias jornadas
+}
+
+// Cuentas de acceso. Guardar `password` siempre hasheada (bcrypt).
+// El ADMIN entra con `email`; cada EMPLEADO, con `usuario` (p. ej. su DNI) y queda vinculado a su Empleado.
 model Usuario {
-  id        Int      @id @default(autoincrement())
-  nombre    String
-  apellido  String
-  email     String   @unique
-  password  String
+  id       Int     @id @default(autoincrement())
+  nombre   String
+  apellido String
+  email    String? @unique // en minúsculas
+  usuario  String? @unique // en minúsculas, sin "@"
+  password String
+  rol      Rol     @default(ADMIN)
+  activo   Boolean @default(true)
+
+  // Se incrementa al cambiar o restablecer la contraseña: invalida todas las sesiones abiertas.
+  sesionVersion       Int     @default(0)
+  // Contraseña temporal asignada por el admin: se pide cambiarla al ingresar.
+  debeCambiarPassword Boolean @default(false)
+
+  empleadoId Int?      @unique
+  empleado   Empleado? @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// Intentos de inicio de sesión, para frenar a quien prueba contraseñas.
+// Una fila por cuenta ("cuenta:<correo o usuario>") y otra por IP ("ip:<dirección>").
+// Se cuenta también para cuentas que no existen, para no delatar cuáles están registradas.
+model IntentoLogin {
+  clave          String    @id
+  intentos       Int       @default(0) // en la ventana actual
+  ventanaInicio  DateTime  @default(now())
+  bloqueadoHasta DateTime?
+
+  @@index([ventanaInicio])
 }
 
 // ------------------------------------------------------------
@@ -158,6 +188,7 @@ model MovimientoStock {
 model Empleado {
   id            Int      @id @default(autoincrement())
   nombre        String
+  dni           String?  @unique // 8 dígitos; es también su usuario para ingresar a la app
   estacionId    Int
   estacion      Estacion @relation(fields: [estacionId], references: [id])
   horarioInicio String? // "06:00"
@@ -166,6 +197,7 @@ model Empleado {
   createdAt     DateTime @default(now())
 
   jornadas Jornada[]
+  usuario  Usuario? // cuenta de acceso a la app (opcional)
 }
 
 // ------------------------------------------------------------

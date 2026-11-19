@@ -4,11 +4,15 @@ import { pagoSchema } from '@/lib/validation/pagos';
 import { recalcularCaja } from '@/lib/jornadas-servicio';
 import { NextResponse } from 'next/server';
 import { responderError } from '@/lib/respuesta-formulario';
+import { exigirAdminApi } from '@/lib/sesion';
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ jornadaId: string }> }
 ) {
+  const denegado = await exigirAdminApi();
+  if (denegado) return denegado;
+
   const { jornadaId } = await params;
   const id = Number(jornadaId);
 
@@ -28,6 +32,9 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ jornadaId: string }> }
 ) {
+  const denegado = await exigirAdminApi();
+  if (denegado) return denegado;
+
   try {
     const { jornadaId } = await params;
     const jornadaIdNumber = Number(jornadaId);

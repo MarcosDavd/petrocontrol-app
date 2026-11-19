@@ -2,8 +2,12 @@ import { NextResponse } from 'next/server';
 import { responderError } from '@/lib/respuesta-formulario';
 import { db } from '@/lib/db';
 import { maquinaSchema } from '@/lib/validation/maestros';
+import { exigirAdminApi } from '@/lib/sesion';
 
 export async function GET() {
+  const denegado = await exigirAdminApi();
+  if (denegado) return denegado;
+
   const maquinas = await db.maquina.findMany({
     include: { estacion: true, productos: { include: { combustible: true } } },
     orderBy: [{ estacionId: 'asc' }, { nombre: 'asc' }],
@@ -13,6 +17,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const denegado = await exigirAdminApi();
+  if (denegado) return denegado;
+
   try {
     const contentType = request.headers.get('content-type') ?? '';
     let rawData: Record<string, unknown>;

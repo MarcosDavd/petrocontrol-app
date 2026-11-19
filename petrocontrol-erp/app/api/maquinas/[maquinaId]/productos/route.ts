@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
 import { responderError } from '@/lib/respuesta-formulario';
 import { db } from '@/lib/db';
+import { exigirAdminApi } from '@/lib/sesion';
 
 /** Reemplaza los productos (combustibles) que despacha una máquina. */
 export async function POST(request: Request, { params }: { params: Promise<{ maquinaId: string }> }) {
+  const denegado = await exigirAdminApi();
+  if (denegado) return denegado;
+
   const { maquinaId } = await params;
   const id = Number(maquinaId);
   if (!Number.isInteger(id) || id <= 0) {

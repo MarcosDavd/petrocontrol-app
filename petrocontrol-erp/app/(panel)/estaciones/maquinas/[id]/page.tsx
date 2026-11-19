@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { EmptyState, PageHeader } from '@/components/page-header';
 import { BotonEstado } from '@/components/boton-estado';
 import { formatoFechaHora, formatoGalones, formatoNumero } from '@/lib/formato';
+import { exigirAdmin } from '@/lib/sesion';
 
 const DIRECCION = { SUBE: 'Sube (de menor a mayor)', BAJA: 'Baja (de mayor a menor)' } as const;
 
@@ -30,6 +31,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 }
 
 export default async function MaquinaPage({ params }: { params: Promise<{ id: string }> }) {
+  await exigirAdmin();
   const { id } = await params;
   const maquinaId = Number(id);
   if (!Number.isInteger(maquinaId) || maquinaId <= 0) notFound();

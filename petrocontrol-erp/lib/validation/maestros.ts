@@ -47,12 +47,29 @@ export const precioSchema = z.object({
   vigenteDesde: z.string().optional().or(z.literal('')),
 });
 
+/** DNI peruano: 8 dígitos. Es también el usuario con el que el empleado ingresa a la app. */
+export const dniSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{8}$/, 'El DNI debe tener 8 dígitos.');
+
 export const empleadoSchema = z.object({
   nombre: z.string().trim().min(2, 'El nombre del empleado es obligatorio.'),
+  // Opcional en la edición: los empleados registrados antes del DNI pueden no tenerlo
+  dni: dniSchema.optional().or(z.literal('')),
   estacionId: z.coerce.number().int().positive('La estación es obligatoria.'),
   horarioInicio: hora('Hora de entrada'),
   horarioFin: hora('Hora de salida'),
   activo: casilla,
 }).refine((data) => Boolean(data.horarioInicio) === Boolean(data.horarioFin), {
   message: 'Indica la hora de entrada y la de salida.',
+});
+
+/** Registro de un empleado nuevo junto con su acceso a la app: todos los datos son obligatorios. */
+export const registroEmpleadoSchema = z.object({
+  nombre: z.string().trim().min(2, 'El nombre del empleado es obligatorio.').max(100, 'El nombre es demasiado largo.'),
+  dni: dniSchema,
+  estacionId: z.coerce.number().int().positive('Selecciona la estación.'),
+  horarioInicio: z.string().trim().regex(HORA_REGEX, 'Selecciona la hora de inicio.'),
+  horarioFin: z.string().trim().regex(HORA_REGEX, 'Selecciona la hora de fin.'),
 });

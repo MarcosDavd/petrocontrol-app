@@ -3,13 +3,13 @@
 import { useActionState } from 'react';
 import { cambiarContrasenaAction, type EstadoCambio } from './actions';
 
-export function CambiarContrasenaForm() {
+export function CambiarContrasenaForm({ temporal = false }: { temporal?: boolean }) {
   const [estado, formAction, pending] = useActionState<EstadoCambio, FormData>(cambiarContrasenaAction, {});
 
   return (
     <form action={formAction} className="space-y-4">
       <div>
-        <label htmlFor="actual" className="label text-sm">Contraseña actual</label>
+        <label htmlFor="actual" className="label text-sm">{temporal ? 'Contraseña temporal' : 'Contraseña actual'}</label>
         <input id="actual" name="actual" type="password" autoComplete="current-password" className="field" required />
       </div>
       <div>
@@ -26,7 +26,7 @@ export function CambiarContrasenaForm() {
       )}
       {estado.ok && (
         <p role="status" className="rounded-lg border border-primary/40 bg-primary-light px-3 py-2 text-sm text-primary">
-          Contraseña actualizada. Úsala la próxima vez que inicies sesión.
+          Contraseña actualizada. Se cerraron las sesiones abiertas en otros dispositivos.
         </p>
       )}
 

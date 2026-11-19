@@ -4,10 +4,12 @@ import { db } from '@/lib/db';
 import { EmptyState, PageHeader } from '@/components/page-header';
 import { BotonEstado } from '@/components/boton-estado';
 import { campoPrecio } from '@/lib/precios';
+import { exigirAdmin } from '@/lib/sesion';
 
 export const metadata = { title: 'Estaciones y máquinas' };
 
 export default async function EstacionesPage() {
+  await exigirAdmin();
   const [estaciones, combustibles] = await Promise.all([
     db.estacion.findMany({
       include: {

@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
 import { responderError } from '@/lib/respuesta-formulario';
 import { db } from '@/lib/db';
+import { exigirAdminApi } from '@/lib/sesion';
 
 /** Activa o desactiva una estación. Body: activa=true|false */
 export async function POST(request: Request, { params }: { params: Promise<{ estacionId: string }> }) {
+  const denegado = await exigirAdminApi();
+  if (denegado) return denegado;
+
   const { estacionId } = await params;
   const id = Number(estacionId);
   if (!Number.isInteger(id) || id <= 0) {

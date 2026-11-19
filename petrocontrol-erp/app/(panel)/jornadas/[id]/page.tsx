@@ -9,6 +9,8 @@ import { eliminarPagoAction } from '../actions';
 import { CerrarJornadaForm } from './cerrar-jornada-form';
 import { ETIQUETA_MEDIO, type MedioPago } from '@/lib/pagos';
 import { sugerirFechaFin } from '@/lib/turnos';
+import { exigirUsuario } from '@/lib/sesion';
+import { rangoFechaEmpleado } from '@/lib/permisos';
 
 export const metadata = { title: 'Detalle de jornada' };
 
@@ -19,6 +21,8 @@ export default async function JornadaDetallePage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ editada?: string }>;
 }) {
+  const usuario = await exigirUsuario();
+  const esAdmin = usuario.rol === 'ADMIN';
   const { id } = await params;
   const { editada } = await searchParams;
   const jornadaId = Number(id);
@@ -34,7 +38,8 @@ export default async function JornadaDetallePage({
       lecturas: { include: { combustible: true }, orderBy: { combustibleId: 'asc' } },
     },
   });
-  if (!jornada) notFound();
+  // Un empleado solo ve sus propias jornadas
+  if (!jornada || (!esAdmin && jornada.empleadoId !== usuario.empleadoId)) notFound();
 
   const abierta = jornada.estado === 'ABIERTA';
 
@@ -57,7 +62,7 @@ export default async function JornadaDetallePage({
   return (
     <div className="space-y-6">
       <Link href="/jornadas" className="inline-flex items-center gap-1 text-sm font-medium text-muted hover:text-primary">
-        <ArrowLeft className="h-4 w-4" aria-hidden /> Jornadas
+        <ArrowLeft className="h-4 w-4" aria-hidden /> {esAdmin ? 'Jornadas' : 'Mis jornadas'}
       </Link>
 
       <PageHeader
@@ -68,9 +73,11 @@ export default async function JornadaDetallePage({
         actions={
           <div className="flex items-center gap-3">
             <span className={abierta ? 'badge-warning text-sm' : 'badge-success text-sm'}>{abierta ? 'Abierta' : 'Cerrada'}</span>
-            <Link href={`/jornadas/${jornada.id}/editar`} className="btn-ghost px-3 py-2">
-              <Pencil className="h-4 w-4" aria-hidden />Editar jornada
-            </Link>
+            {esAdmin && (
+              <Link href={`/jornadas/${jornada.id}/editar`} className="btn-ghost px-3 py-2">
+                <Pencil className="h-4 w-4" aria-hidden />Editar jornada
+              </Link>
+            )}
           </div>
         }
       />
@@ -162,6 +169,7 @@ export default async function JornadaDetallePage({
             empleado={jornada.empleado.nombre}
             horarioFin={jornada.empleado.horarioFin}
             fechaSugerida={sugerirFechaFin(jornada.inicio, jornada.empleado.horarioFin)}
+            rangoFecha={esAdmin ? undefined : rangoFechaEmpleado()}
             notas={jornada.notas ?? ''}
             lecturas={jornada.lecturas.map((lectura) => ({
               combustibleId: lectura.combustibleId,
@@ -213,33 +221,37 @@ export default async function JornadaDetallePage({
                   </span>
                   <span className="flex items-center gap-2">
                     <span className="tabular-nums font-semibold">{formatoSoles(pago.monto)}</span>
-                    <form action={eliminarPagoAction}>
-                      <input type="hidden" name="pagoId" value={pago.id} />
-                      <input type="hidden" name="jornadaId" value={jornada.id} />
-                      <button type="submit" className="rounded p-1 text-muted hover:bg-danger-light hover:text-danger" aria-label="Eliminar pago">
-                        <Trash2 className="h-4 w-4" aria-hidden />
-                      </button>
-                    </form>
+                    {esAdmin && (
+                      <form action={eliminarPagoAction}>
+                        <input type="hidden" name="pagoId" value={pago.id} />
+                        <input type="hidden" name="jornadaId" value={jornada.id} />
+                        <button type="submit" className="rounded p-1 text-muted hover:bg-danger-light hover:text-danger" aria-label="Eliminar pago">
+                          <Trash2 className="h-4 w-4" aria-hidden />
+                        </button>
+                      </form>
+                    )}
                   </span>
                 </li>
               ))}
             </ul>
           )}
 
-          {/* Corrección posterior: un pago que se olvidó al cerrar */}
-          <details className="mt-4">
-            <summary className="cursor-pointer text-sm font-medium text-primary">Agregar un pago olvidado</summary>
-            <form action={`/api/jornadas/${jornada.id}/pagos`} method="post" className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_1fr_auto]">
-              <select name="medio" aria-label="Medio de pago" className="field" defaultValue="EFECTIVO" required>
-                {Object.entries(ETIQUETA_MEDIO).map(([valor, etiqueta]) => (
-                  <option key={valor} value={valor}>{etiqueta}</option>
-                ))}
-              </select>
-              <input name="monto" type="number" inputMode="decimal" step="0.01" min="0.01" placeholder="Monto (S/)" aria-label="Monto" className="field" required />
-              <input name="nota" placeholder="Nota (opcional)" aria-label="Nota" className="field" />
-              <button type="submit" className="btn-ghost">Agregar pago</button>
-            </form>
-          </details>
+          {/* Corrección posterior (solo el admin): un pago que se olvidó al cerrar */}
+          {esAdmin && (
+            <details className="mt-4">
+              <summary className="cursor-pointer text-sm font-medium text-primary">Agregar un pago olvidado</summary>
+              <form action={`/api/jornadas/${jornada.id}/pagos`} method="post" className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_1fr_auto]">
+                <select name="medio" aria-label="Medio de pago" className="field" defaultValue="EFECTIVO" required>
+                  {Object.entries(ETIQUETA_MEDIO).map(([valor, etiqueta]) => (
+                    <option key={valor} value={valor}>{etiqueta}</option>
+                  ))}
+                </select>
+                <input name="monto" type="number" inputMode="decimal" step="0.01" min="0.01" placeholder="Monto (S/)" aria-label="Monto" className="field" required />
+                <input name="nota" placeholder="Nota (opcional)" aria-label="Nota" className="field" />
+                <button type="submit" className="btn-ghost">Agregar pago</button>
+              </form>
+            </details>
+          )}
         </section>
       )}
     </div>

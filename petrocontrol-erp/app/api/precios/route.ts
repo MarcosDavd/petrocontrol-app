@@ -4,8 +4,12 @@ import { Prisma } from '@/generated/prisma';
 import { db } from '@/lib/db';
 import { precioSchema } from '@/lib/validation/maestros';
 import { fechaVigencia } from '@/lib/precios';
+import { exigirAdminApi } from '@/lib/sesion';
 
 export async function GET() {
+  const denegado = await exigirAdminApi();
+  if (denegado) return denegado;
+
   const precios = await db.historialPrecio.findMany({
     include: { combustible: true, estacion: true },
     orderBy: [{ estacionId: 'asc' }, { combustibleId: 'asc' }, { vigenteDesde: 'desc' }],
@@ -15,6 +19,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const denegado = await exigirAdminApi();
+  if (denegado) return denegado;
+
   try {
     const contentType = request.headers.get('content-type') ?? '';
     const rawData = contentType.includes('application/json')

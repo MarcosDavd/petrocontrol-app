@@ -1,6 +1,7 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 import type { NextRequest } from 'next/server';
+import type { Rol } from './permisos';
 
 export const SESSION_COOKIE = 'petrocontrol_session';
 const DEV_SECRET = 'petrocontrol-dev-secret-change-me';
@@ -20,15 +21,34 @@ function getSessionSecret(): Uint8Array {
   return new TextEncoder().encode(secret || DEV_SECRET);
 }
 
+/**
+ * Datos que viajan firmados en la cookie. Sirven al middleware para filtrar rutas sin ir a la base;
+ * la validez real (cuenta activa, contraseña no cambiada) se comprueba en lib/sesion.ts.
+ */
 export type SessionUser = {
   userId: number;
-  email: string;
+  rol: Rol;
+  /** sesionVersion del usuario al ingresar: si cambió, la sesión ya no vale. */
+  version: number;
+  /** Tiene una contraseña temporal que debe cambiar. */
+  cambioPendiente: boolean;
 };
 
-export async function createSessionToken(user: { id: number; email: string }): Promise<string> {
+export async function createSessionToken(user: {
+  id: number;
+  rol: Rol;
+  sesionVersion: number;
+  debeCambiarPassword: boolean;
+}): Promise<string> {
   const secret = getSessionSecret();
 
-  return new SignJWT({ userId: user.id, email: user.email, type: 'session' })
+  return new SignJWT({
+    userId: user.id,
+    rol: user.rol,
+    sv: user.sesionVersion,
+    cp: user.debeCambiarPassword,
+    type: 'session',
+  })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('7d')
@@ -39,15 +59,17 @@ export async function verifySessionToken(token: string): Promise<SessionUser | n
   const secret = getSessionSecret();
 
   try {
-    const { payload } = await jwtVerify(token, secret);
+    const { payload } = await jwtVerify(token, secret, { algorithms: ['HS256'] });
     const userId = Number(payload.userId);
-    const email = typeof payload.email === 'string' ? payload.email : '';
+    const rol = payload.rol;
+    const version = payload.sv;
 
-    if (!userId || !email) {
-      return null;
-    }
+    // Los tokens anteriores a los roles no traen rol ni versión: se piden credenciales de nuevo.
+    if (payload.type !== 'session' || !Number.isInteger(userId) || userId <= 0) return null;
+    if (rol !== 'ADMIN' && rol !== 'EMPLEADO') return null;
+    if (typeof version !== 'number' || !Number.isInteger(version)) return null;
 
-    return { userId, email };
+    return { userId, rol, version, cambioPendiente: payload.cp === true };
   } catch {
     return null;
   }

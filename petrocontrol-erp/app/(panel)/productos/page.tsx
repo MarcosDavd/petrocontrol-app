@@ -3,12 +3,14 @@ import { db } from '@/lib/db';
 import { EmptyState, PageHeader } from '@/components/page-header';
 import { formatoFecha, formatoSoles } from '@/lib/formato';
 import { campoPrecioEstacion } from '@/lib/precios';
+import { exigirAdmin } from '@/lib/sesion';
 
 export const metadata = { title: 'Productos y precios' };
 
 const HISTORIAL_MAXIMO = 40;
 
 export default async function ProductosPage() {
+  await exigirAdmin();
   const ahora = new Date();
   const [estaciones, combustibles, precios, historial] = await Promise.all([
     db.estacion.findMany({ select: { id: true, nombre: true, activa: true }, orderBy: { nombre: 'asc' } }),
