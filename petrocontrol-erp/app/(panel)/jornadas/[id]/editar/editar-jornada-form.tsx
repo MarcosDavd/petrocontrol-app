@@ -305,7 +305,7 @@ export function EditarJornadaForm({
 
         {cerrada && (
           <p className="border-l-4 border-accent bg-accent-light px-3 py-2 text-sm text-fg">
-            Al guardar se recalculan los galones, el precio (el vigente en la fecha de inicio), los importes, el stock de
+            Al guardar se recalculan los galones, el precio (el vigente al fin de la jornada), los importes, el stock de
             los tanques y el cuadre de caja. Los pagos se corrigen en el detalle de la jornada.
           </p>
         )}

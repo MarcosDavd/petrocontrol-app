@@ -13,7 +13,7 @@ export type LecturaAbierta = {
   nombre: string;
   entradaAtras: string;
   entradaAdelante: string;
-  /** Precio por galón de la estación vigente al inicio de la jornada (null = sin precio). */
+  /** Precio por galón de la estación vigente al fin estimado del turno (null = sin precio). */
   precio: string | null;
 };
 

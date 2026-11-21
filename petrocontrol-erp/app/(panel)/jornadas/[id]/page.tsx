@@ -11,6 +11,7 @@ import { AgregarPagoForm } from './agregar-pago-form';
 import { EliminarJornadaBoton } from './eliminar-jornada-boton';
 import { ETIQUETA_MEDIO, type MedioPago } from '@/lib/pagos';
 import { sugerirFechaFin } from '@/lib/turnos';
+import { fechaHoraLima } from '@/lib/zona-horaria';
 import { puedeEliminarJornada } from '@/lib/jornada';
 import { exigirUsuario } from '@/lib/sesion';
 import { rangoFechaEmpleado } from '@/lib/permisos';
@@ -46,13 +47,17 @@ export default async function JornadaDetallePage({
 
   const abierta = jornada.estado === 'ABIERTA';
 
-  // Precio de la estación vigente al inicio de la jornada, por producto (para el resumen del cierre)
+  // Resumen del cierre: el cierre usa el precio vigente al FIN de la jornada. Aquí todavía no hay fin,
+  // así que se estima con la fecha de cierre sugerida y la hora de salida del horario (o ahora, sin horario).
+  const fechaFinSugerida = abierta ? sugerirFechaFin(jornada.inicio, jornada.empleado.horarioFin) : '';
+  const finEstimado =
+    abierta && jornada.empleado.horarioFin ? fechaHoraLima(fechaFinSugerida, jornada.empleado.horarioFin) : new Date();
   const precios = abierta
     ? await db.historialPrecio.findMany({
         where: {
           estacionId: jornada.estacionId,
           combustibleId: { in: jornada.lecturas.map((l) => l.combustibleId) },
-          vigenteDesde: { lte: jornada.inicio },
+          vigenteDesde: { lte: finEstimado },
         },
         orderBy: { vigenteDesde: 'desc' },
       })
@@ -176,7 +181,7 @@ export default async function JornadaDetallePage({
             conTotalizador={jornada.totalizadorEntrada !== null}
             empleado={jornada.empleado.nombre}
             horarioFin={jornada.empleado.horarioFin}
-            fechaSugerida={sugerirFechaFin(jornada.inicio, jornada.empleado.horarioFin)}
+            fechaSugerida={fechaFinSugerida}
             rangoFecha={esAdmin ? undefined : rangoFechaEmpleado()}
             notas={jornada.notas ?? ''}
             lecturas={jornada.lecturas.map((lectura) => ({

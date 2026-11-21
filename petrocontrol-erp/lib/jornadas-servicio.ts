@@ -11,7 +11,7 @@ import { calcularGalonesLectura, puedeEliminarJornada } from './jornada';
 import { ErrorNegocio } from './errores';
 import { HORA_REGEX } from './turnos';
 import { fechaHoraLima } from './zona-horaria';
-import { formatoFecha, formatoFechaHora } from './formato';
+import { formatoFechaHora } from './formato';
 import type { PagoCierre } from './validation/jornadas';
 
 const dec = (centesimas: bigint) => new Prisma.Decimal(deCentesimas(centesimas));
@@ -211,10 +211,14 @@ function calcularFin(empleado: { nombre: string; horarioFin: string | null }, fe
 }
 
 /**
- * Galones, precio (de la estación, vigente en `inicio`) e importe de cada producto a partir de
- * las lecturas ANTERIOR (`entradas`) y ACTUAL (`lecturas`). Lo usan el cierre y la edición.
+ * Galones, precio e importe de cada producto a partir de las lecturas ANTERIOR (`entradas`) y
+ * ACTUAL (`lecturas`). Lo usan el cierre y la edición.
+ *
+ * El precio es el de la estación vigente al FIN de la jornada: si el precio cambió durante el turno,
+ * todo el turno se valoriza con el nuevo. (El inicio no sirve: sale del horario del empleado y puede
+ * ser anterior a un precio registrado antes de abrir la jornada.)
  */
-async function calcularCierre(jornada: JornadaCompleta, inicio: Date, entradas: Entradas, lecturas: LecturaCierre[]) {
+async function calcularCierre(jornada: JornadaCompleta, fin: Date, entradas: Entradas, lecturas: LecturaCierre[]) {
   const { maquina } = jornada;
   const tanques = await db.tanque.findMany({ where: { estacionId: jornada.estacionId } });
 
@@ -238,14 +242,14 @@ async function calcularCierre(jornada: JornadaCompleta, inicio: Date, entradas: 
         { modulo: maquina.moduloContador, direccion: maquina.direccionProductos, producto }
       );
 
-      // Precio de ESTA estación vigente al inicio de la jornada (cada estación tiene los suyos)
+      // Precio de ESTA estación (cada estación tiene los suyos) vigente al fin de la jornada
       const precio = await db.historialPrecio.findFirst({
-        where: { estacionId: jornada.estacionId, combustibleId: lectura.combustibleId, vigenteDesde: { lte: inicio } },
+        where: { estacionId: jornada.estacionId, combustibleId: lectura.combustibleId, vigenteDesde: { lte: fin } },
         orderBy: { vigenteDesde: 'desc' },
       });
       if (!precio) {
         throw new ErrorNegocio(
-          `${producto} no tiene precio en ${jornada.estacion.nombre} vigente al ${formatoFecha(inicio)}. Regístralo en Productos y precios.`
+          `${producto} no tiene precio en ${jornada.estacion.nombre} vigente al ${formatoFechaHora(fin)}. Regístralo en Productos y precios.`
         );
       }
 
@@ -380,7 +384,7 @@ export async function cerrarJornada(
   if (jornada.estado !== 'ABIERTA') throw new ErrorNegocio('La jornada ya está cerrada.');
 
   const fin = calcularFin(jornada.empleado, input.fecha, input.horaManual, jornada.inicio);
-  const cierres = await calcularCierre(jornada, jornada.inicio, entradasGuardadas(jornada), input.lecturas);
+  const cierres = await calcularCierre(jornada, fin, entradasGuardadas(jornada), input.lecturas);
   const totalizadorEntrada = jornada.totalizadorEntrada === null ? null : aCentesimas(jornada.totalizadorEntrada);
   const totalizador = calcularTotalizador(jornada, totalizadorEntrada, input.totalizadorSalida);
 
@@ -453,7 +457,7 @@ function siguienteJornada(maquinaId: number, jornadaId: number, inicio: Date) {
  * Corrige una jornada abierta o cerrada (errores de digitación).
  * - Abierta: empleado, fecha de inicio, ANTERIOR de cada producto, totalizador de entrada y notas.
  * - Cerrada: además el ACTUAL, la fecha de cierre y el totalizador de salida; se recalculan
- *   galones, precio (vigente en la nueva fecha), importes, venta de stock y cuadre de caja.
+ *   galones, precio (vigente al fin de la jornada), importes, venta de stock y cuadre de caja.
  * La máquina no se cambia (define los productos y la secuencia de contadores).
  * También se recalcula el salto de contador de la jornada siguiente de la máquina.
  */
@@ -518,7 +522,7 @@ export async function editarJornada(
       input.conservarFechas && jornada.fin
         ? jornada.fin
         : calcularFin(empleado, input.cierre.fecha, input.cierre.horaManual, inicio);
-    const cierres = await calcularCierre(jornada, inicio, entradas, input.cierre.lecturas);
+    const cierres = await calcularCierre(jornada, fin, entradas, input.cierre.lecturas);
     cierreCalculado = { fin, cierres, totalizador: calcularTotalizador(jornada, totalizadorEntrada, input.cierre.totalizadorSalida) };
   }
 
