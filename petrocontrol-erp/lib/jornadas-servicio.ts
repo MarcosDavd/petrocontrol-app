@@ -7,7 +7,7 @@ import {
   calcularImporte,
   deCentesimas,
 } from './calculos';
-import { calcularGalonesLectura } from './jornada';
+import { calcularGalonesLectura, puedeEliminarJornada } from './jornada';
 import { ErrorNegocio } from './errores';
 import { HORA_REGEX } from './turnos';
 import { fechaHoraLima } from './zona-horaria';
@@ -565,6 +565,38 @@ export async function editarJornada(
     }
   }
   return actualizada;
+}
+
+/**
+ * Elimina una jornada (abierta o cerrada) registrada hace 24 horas o menos, y deshace todo lo que generó:
+ * - sus movimientos de VENTA (el combustible vuelve al stock de los tanques),
+ * - sus lecturas y pagos,
+ * - y recalcula el salto de contador de la jornada siguiente de la máquina, que ahora
+ *   se compara con la jornada anterior a la eliminada.
+ * Reportes, cuadre del mes e inventario se calculan a partir de estos datos: quedan al día solos.
+ */
+export async function eliminarJornada(jornadaId: number) {
+  const jornada = await db.jornada.findUnique({
+    where: { id: jornadaId },
+    select: { id: true, maquinaId: true, inicio: true, createdAt: true },
+  });
+  if (!jornada) throw new ErrorNegocio('La jornada no existe.');
+  if (!puedeEliminarJornada(jornada.createdAt)) {
+    throw new ErrorNegocio(
+      'Solo se puede eliminar una jornada hasta 24 horas después de registrarla. Para corregirla, usa "Editar jornada".'
+    );
+  }
+
+  const siguiente = await siguienteJornada(jornada.maquinaId, jornada.id, jornada.inicio);
+
+  await db.$transaction([
+    db.movimientoStock.deleteMany({ where: { jornadaId } }),
+    db.lecturaJornada.deleteMany({ where: { jornadaId } }),
+    db.pagoJornada.deleteMany({ where: { jornadaId } }),
+    db.jornada.delete({ where: { id: jornadaId } }),
+  ]);
+
+  if (siguiente) await recalcularSaltoApertura(siguiente.id);
 }
 
 /** Recalcula lo declarado y la diferencia de caja después de agregar o quitar pagos. */

@@ -83,3 +83,16 @@ export function calcularResumenJornada({
     diferenciaCaja,
   };
 }
+
+/**
+ * Plazo para eliminar una jornada: 24 horas desde que se registró.
+ * Eliminarla devuelve al tanque lo que vendió; pasado un día ya puede haber recargas, ajustes de
+ * medición o reportes que la tomaron en cuenta, y devolver ese combustible descuadraría el stock.
+ * Después del plazo se corrige con "Editar jornada".
+ */
+export const PLAZO_ELIMINAR_JORNADA_MS = 24 * 60 * 60 * 1000;
+
+export function puedeEliminarJornada(registradaEn: Date, ahora = new Date()) {
+  // Sin mínimo: una diferencia de reloj de unos segundos no debe impedir borrar una recién creada
+  return ahora.getTime() - registradaEn.getTime() <= PLAZO_ELIMINAR_JORNADA_MS;
+}

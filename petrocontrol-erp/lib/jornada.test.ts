@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calcularResumenJornada } from './jornada';
+import { calcularResumenJornada, puedeEliminarJornada } from './jornada';
 
 describe('calcularResumenJornada', () => {
   it('resume galones, caja y diferencia en una sola operación', () => {
@@ -19,5 +19,23 @@ describe('calcularResumenJornada', () => {
     expect(resumen.importeEsperado).toBe(15_600n);
     expect(resumen.importeDeclarado).toBe(1_500n);
     expect(resumen.diferenciaCaja).toBe(14_100n);
+  });
+});
+
+describe('plazo para eliminar una jornada', () => {
+  const registrada = new Date('2026-11-20T13:00:00Z');
+
+  it('se puede hasta 24 horas después de registrarla', () => {
+    expect(puedeEliminarJornada(registrada, new Date('2026-11-20T13:05:00Z'))).toBe(true);
+    expect(puedeEliminarJornada(registrada, new Date('2026-11-21T13:00:00Z'))).toBe(true);
+  });
+
+  it('pasadas las 24 horas ya no', () => {
+    expect(puedeEliminarJornada(registrada, new Date('2026-11-21T13:00:01Z'))).toBe(false);
+    expect(puedeEliminarJornada(registrada, new Date('2026-12-20T13:00:00Z'))).toBe(false);
+  });
+
+  it('una pequeña diferencia de reloj no bloquea una recién creada', () => {
+    expect(puedeEliminarJornada(registrada, new Date('2026-11-20T12:59:58Z'))).toBe(true);
   });
 });

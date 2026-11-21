@@ -221,6 +221,9 @@ model Jornada {
   fin        DateTime?
   estado     EstadoJornada @default(ABIERTA)
   notas      String?
+  // Cuándo se registró en la app (no es el inicio del turno: puede cargarse con fecha pasada).
+  // Define el plazo para eliminarla (ver lib/jornada.ts).
+  createdAt  DateTime      @default(now())
 
   // Contador general de la máquina (opcional). Control cruzado.
   totalizadorEntrada Decimal? @db.Decimal(12, 2)

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ChevronRight, ClipboardList, PlayCircle, Timer } from 'lucide-react';
+import { ChevronRight, CircleCheck, ClipboardList, PlayCircle, Timer } from 'lucide-react';
 import { db } from '@/lib/db';
 import { EmptyState, PageHeader } from '@/components/page-header';
 import { AlertasJornada, tieneAlertas } from '@/components/alertas-jornada';
@@ -74,8 +74,9 @@ async function getDatos(usuario: UsuarioActual) {
   };
 }
 
-export default async function JornadasPage() {
+export default async function JornadasPage({ searchParams }: { searchParams: Promise<{ eliminada?: string }> }) {
   const usuario = await exigirUsuario();
+  const { eliminada } = await searchParams;
   const esEmpleado = usuario.rol === 'EMPLEADO';
   const { maquinas, empleados, abiertas, cerradas } = await getDatos(usuario);
   // Un empleado no puede tener dos jornadas abiertas: con una en curso, solo le queda cerrarla
@@ -91,6 +92,13 @@ export default async function JornadasPage() {
             : 'Registra cómo recibe y cómo deja cada empleado los contadores de su máquina.'
         }
       />
+
+      {eliminada && (
+        <p role="status" className="flex items-center gap-2 border-l-4 border-primary bg-primary-light px-4 py-3 text-sm text-fg">
+          <CircleCheck className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+          Jornada eliminada. El stock de los tanques y los reportes ya están actualizados.
+        </p>
+      )}
 
       <section className="grid items-start gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         {puedeAbrir ? (

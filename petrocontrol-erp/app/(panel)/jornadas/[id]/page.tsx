@@ -8,8 +8,10 @@ import { formatoFechaHora, formatoGalones, formatoNumero, formatoSoles } from '@
 import { eliminarPagoAction } from '../actions';
 import { CerrarJornadaForm } from './cerrar-jornada-form';
 import { AgregarPagoForm } from './agregar-pago-form';
+import { EliminarJornadaBoton } from './eliminar-jornada-boton';
 import { ETIQUETA_MEDIO, type MedioPago } from '@/lib/pagos';
 import { sugerirFechaFin } from '@/lib/turnos';
+import { puedeEliminarJornada } from '@/lib/jornada';
 import { exigirUsuario } from '@/lib/sesion';
 import { rangoFechaEmpleado } from '@/lib/permisos';
 
@@ -77,6 +79,13 @@ export default async function JornadaDetallePage({
             <Link href={`/jornadas/${jornada.id}/editar`} className="btn-ghost px-3 py-2">
               <Pencil className="h-4 w-4" aria-hidden />{esAdmin ? 'Editar jornada' : 'Corregir'}
             </Link>
+            {esAdmin && puedeEliminarJornada(jornada.createdAt) && (
+              <EliminarJornadaBoton
+                jornadaId={jornada.id}
+                descripcion={`${jornada.empleado.nombre} en ${jornada.maquina.nombre} (${jornada.estacion.nombre}), ${formatoFechaHora(jornada.inicio)}`}
+                cerrada={!abierta}
+              />
+            )}
           </div>
         }
       />

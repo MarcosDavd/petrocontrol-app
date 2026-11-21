@@ -3,12 +3,12 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { Prisma } from '@/generated/prisma';
-import { exigirUsuario, type UsuarioActual } from '@/lib/sesion';
+import { exigirAdmin, exigirUsuario, type UsuarioActual } from '@/lib/sesion';
 import { pagoSchema } from '@/lib/validation/pagos';
 import { MENSAJE_FECHA_EMPLEADO, fechaPermitidaParaEmpleado } from '@/lib/permisos';
 import { db } from '@/lib/db';
 import { ErrorNegocio } from '@/lib/errores';
-import { abrirJornada, cerrarJornada, editarJornada, recalcularCaja } from '@/lib/jornadas-servicio';
+import { abrirJornada, cerrarJornada, editarJornada, eliminarJornada, recalcularCaja } from '@/lib/jornadas-servicio';
 import {
   abrirJornadaSchema,
   camposPorProducto,
@@ -216,4 +216,23 @@ export async function agregarPagoAction(_prev: EstadoFormulario, formData: FormD
   revalidarTodo();
   revalidatePath(`/jornadas/${jornadaId}`);
   return {};
+}
+
+/**
+ * Elimina una jornada (solo el admin): devuelve su venta al stock, borra lecturas y pagos
+ * y recalcula el salto de contador de la jornada siguiente de la máquina.
+ */
+export async function eliminarJornadaAction(_prev: EstadoFormulario, formData: FormData): Promise<EstadoFormulario> {
+  await exigirAdmin();
+  const jornadaId = Number(formData.get('jornadaId'));
+  if (!Number.isInteger(jornadaId) || jornadaId <= 0) return { error: 'Jornada inválida.' };
+
+  try {
+    await eliminarJornada(jornadaId);
+  } catch (error) {
+    return mensajeDeError(error, 'ELIMINAR_JORNADA_ERROR');
+  }
+
+  revalidarTodo();
+  redirect('/jornadas?eliminada=1');
 }
